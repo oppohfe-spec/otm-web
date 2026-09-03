@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OTM · Gestión de Órdenes de Trabajo de Mantenimiento</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Inter','ui-sans-serif','system-ui'] },
+        colors: {
+          brand: {
+            50:'#eef7ff',100:'#d9edff',200:'#b7dcff',300:'#84c4ff',400:'#4aa4ff',
+            500:'#1f83f7',600:'#0a6ed1',700:'#0857a8',800:'#0a4a88',900:'#0d3d6e'
+          },
+          ink:{50:'#f4f6f8',100:'#e8ecf1',200:'#d3dae3',300:'#aab7c4',400:'#7c8b9b',
+               500:'#5a6b7d',600:'#425063',700:'#2e394a',800:'#1c2534',900:'#111826'}
+        },
+        boxShadow: {
+          card: '0 1px 2px rgba(17,24,38,0.06), 0 1px 1px rgba(17,24,38,0.04)',
+          pop: '0 8px 24px rgba(17,24,38,0.12)'
+        }
+      }
+    }
+  }
+</script>
+<style>
+  html,body{height:100%;font-family:'Inter',ui-sans-serif,system-ui;}
+  body{background:#f4f6f8;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#c7d0da;border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  .nav-link{position:relative;}
+  .nav-link.active{background:rgba(255,255,255,0.08);}
+  .nav-link.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;background:#4aa4ff;border-radius:0 3px 3px 0;}
+  .kpi-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .bar{transition:height .6s cubic-bezier(.22,1,.36,1), width .5s cubic-bezier(.22,1,.36,1);}
+  .modal-backdrop{background:rgba(17,24,38,0.55);backdrop-filter: blur(2px);}
+  .modal-panel{animation:pop .18s ease-out;}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+  .toast{animation:toastin .25s ease-out}
+  @keyframes toastin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .tab-btn{border-bottom:2px solid transparent;}
+  .tab-btn.active{color:#0a6ed1;border-color:#0a6ed1;}
+  input:focus, select:focus, textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(10,110,209,0.15);border-color:#0a6ed1;}
+  .chip{display:inline-flex;align-items:center;gap:4px;}
+  .donut{transition:stroke-dasharray .8s ease;}
+  .filter-bar-btn{cursor:pointer;transition:filter .15s;}
+  .filter-bar-btn:hover{filter:brightness(0.92);}
+  .filter-bar-btn.dimmed{opacity:0.35;}
+  .step-dot{width:10px;height:10px;border-radius:9999px;}
+  .step-line{height:2px;flex:1;}
+  .ac-list{position:absolute;z-index:30;margin-top:4px;width:100%;background:#fff;border:1px solid #d3dae3;border-radius:10px;box-shadow:0 8px 24px rgba(17,24,38,0.12);max-height:15rem;overflow-y:auto;}
+  .date-pill{scroll-snap-align:start;}
+  .date-pills-track{scrollbar-width:none;}
+  .date-pills-track::-webkit-scrollbar{display:none;}
+  .otm-card{transition:box-shadow .15s;}
+</style>
+</head>
+<body class="text-ink-800 antialiased">
+
+<div id="app" class="min-h-screen flex">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="fixed z-30 inset-y-0 left-0 w-64 bg-ink-900 text-ink-200 flex flex-col -translate-x-full lg:translate-x-0 transition-transform duration-200">
+    <div class="h-16 flex items-center gap-2 px-5 border-b border-white/10">
+      <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center font-bold text-white text-sm">OT</div>
+      <div>
+        <p class="text-white font-semibold text-sm leading-tight">OTM Manager</p>
+        <p class="text-[11px] text-ink-400 leading-tight">Planta de Tratamiento</p>
+      </div>
+      <button onclick="toggleSidebar()" class="ml-auto lg:hidden text-ink-400 hover:text-white">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
+      <button data-view="dashboard" onclick="navigate('dashboard')" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-left">
+        <svg class="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button data-view="crear" onclick="navigate('crear')" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-left">
+        <svg class="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        <span>Reportar OTM</span>
+      </button>
+      <button data-view="gestion" onclick="navigate('gestion')" class="nav-link active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-left">
+        <svg class="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
+        <span>OTM del día</span>
+      </button>
+      <button data-view="materiales" onclick="navigate('materiales')" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 text-left">
+        <svg class="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-8.25-4.5L3.75 7.5m16.5 0l-8.25 4.5m8.25-4.5v9L12 21m0-9L3.75 7.5m8.25 4.5V21M3.75 7.5v9L12 21"/></svg>
+        <span>Materiales</span>
+      </button>
+    </nav>
+    <div class="px-3 pb-3">
+      <div class="rounded-lg bg-white/5 p-3">
+        <p class="text-[11px] font-semibold text-ink-300 uppercase tracking-wide mb-2">Cómo se usa</p>
+        <p class="text-[11px] text-ink-400 leading-relaxed">Reporta la OTM con equipo, actividad y diagnóstico. El personal y los materiales pueden agregarse ahora o luego, desde "OTM del día".</p>
+      </div>
+    </div>
+    <div class="p-3 border-t border-white/10">
+      <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
+        <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-semibold">JB</div>
+        <div class="leading-tight">
+          <p class="text-xs font-medium text-white">J. Bellodas</p>
+          <p class="text-[11px] text-ink-400">Supervisor de Mantenimiento</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/40 z-20 lg:hidden"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 lg:ml-64 flex flex-col min-h-screen">
+    <!-- NAVBAR -->
+    <header class="h-16 sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-ink-100 flex items-center gap-3 px-4 lg:px-6">
+      <button onclick="toggleSidebar()" class="lg:hidden text-ink-500 hover:text-ink-800">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
+      </button>
+      <div>
+        <h1 id="pageTitle" class="text-base lg:text-lg font-semibold text-ink-900">OTM del día</h1>
+        <p id="pageSubtitle" class="text-xs text-ink-400 hidden sm:block">Consulta, ejecuta y cierra las órdenes registradas</p>
+      </div>
+      <div class="ml-auto flex items-center gap-2 lg:gap-4">
+        <button class="relative text-ink-500 hover:text-ink-800 hidden sm:block">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+          <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+        </button>
+        <button onclick="navigate('crear')" class="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-3.5 py-2 rounded-lg shadow-card transition">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          <span class="hidden sm:inline">Reportar OTM</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 lg:p-6 max-w-[1400px] w-full mx-auto">
+      <div id="view-dashboard" class="hidden"></div>
+      <div id="view-crear" class="hidden"></div>
+      <div id="view-gestion"></div>
+      <div id="view-materiales" class="hidden"></div>
+    </main>
+  </div>
+</div>
+
+<div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+<div id="modalRoot"></div>
+
+<script>
+/* =========================================================
+   CONEXIÓN A GOOGLE SHEETS (Apps Script Web App)
+   ========================================================= */
+const CONFIG = {
+  // Pegar acá la URL que entrega Apps Script al publicar ("Implementar > Nueva implementación > Aplicación web")
+  API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
+};
+
+async function apiGet(){
+  const res = await fetch(CONFIG.API_URL + '?action=snapshot', {method:'GET'});
+  if(!res.ok) throw new Error('No se pudo leer el Sheet ('+res.status+')');
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'Error desconocido leyendo el Sheet');
+  return data;
+}
+async function apiPost(action, payload){
+  // Content-Type text/plain evita el preflight CORS que Apps Script no responde bien
+  const res = await fetch(CONFIG.API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({action, payload})
+  });
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'Error desconocido guardando en el Sheet');
+  return data;
+}
+function syncOTM(o){
+  apiPost('upsert_otm', {otm:o}).catch(err=>{
+    console.error(err);
+    toast('No se pudo sincronizar con el Sheet: '+err.message, 'error');
+  });
+}
+
+/* =========================================================
+   DATOS MAESTROS (se cargan desde el Google Sheet al iniciar;
+   estos arrays quedan vacíos hasta que loadDataFromSheet() los llena)
+   ========================================================= */
+let EQUIPOS = [
+  {dni:8000092, nombre:'RED DE TUBERIA DE ADUCCIÓN B6A', categoria:'RED DE_TUBERIA'},
+  {dni:8000093, nombre:'RED DE TUBERIA DE ADUCCIÓN B6B', categoria:'RED DE_TUBERIA'},
+  {dni:8000090, nombre:'TOMA DE CAPTACIÓN B6A', categoria:'TOM_CAPTACION'},
+  {dni:8000091, nombre:'TOMA DE CAPTACIÓN B6B', categoria:'TOM_CAPTACION'},
+  {dni:8000099, nombre:'RESERVORIO 1', categoria:'RESERVORIO'},
+  {dni:8000100, nombre:'RESERVORIO 2', categoria:'RESERVORIO'},
+  {dni:8000095, nombre:'FLOCULADOR 1', categoria:'FLOCULADOR'},
+  {dni:8000096, nombre:'FLOCULADOR 2', categoria:'FLOCULADOR'},
+  {dni:8000097, nombre:'SEDIMENTADOR 1', categoria:'SEDIMENTADOR'},
+  {dni:8000098, nombre:'SEDIMENTADOR 2', categoria:'SEDIMENTADOR'},
+  {dni:8000234, nombre:'AUTOMATIZACIÓN DE CAMPO O1E1', categoria:'AUTOMATIZACIÓN_CAMPO'},
+  {dni:8000235, nombre:'AUTOMATIZACIÓN DE CAMPO O1E2', categoria:'AUTOMATIZACIÓN_CAMPO'},
+  {dni:8000111, nombre:'BATERIA DE FILTROS DE ANILLOS O1E1', categoria:'BATERIA_FILTROS_ANILLOS'},
+  {dni:8000221, nombre:'BATERIA DE FILTRADO DE ASPERSIÓN', categoria:'BATERIA_FILTRADO'},
+];
+
+// Actividad -> DNI -> Tipo_Mtto (MP=Preventivo, MC=Correctivo, MMJ=Mejora)
+let ACTIVIDADES = {
+  8000092:[{a:'CAMB. VALVULA VOLANTE HIDRANTE B6A', tipo:'MC'}],
+  8000090:[{a:'CAMB. VALVULA VOLANTE CONEX. HIDRANTE', tipo:'MC'}],
+  8000091:[{a:'REV. VALVULA HIDRANTE B6B', tipo:'MP'}],
+  8000093:[{a:'REV. RED ADUCCIÓN B6B', tipo:'MP'}],
+  8000099:[
+    {a:'MTTO.GENERAL (EXTRACCIÓN DE LODOS) R1', tipo:'MP'},
+    {a:'LIMP. DE TALUDES R1', tipo:'MP'},
+    {a:'LIMP. DE TOMA FLOTANTE R1', tipo:'MP'},
+    {a:'REP. TUBERIA RESERVORIO 1', tipo:'MC'},
+    {a:'REP. ARCO DE VALVULA R1', tipo:'MC'},
+    {a:'REP.GEOMEMBRANA TALUD R1', tipo:'MC'},
+  ],
+  8000100:[
+    {a:'MTTO.GENERAL (EXTRACCIÓN DE LODOS) R2', tipo:'MP'},
+    {a:'LIMP. DE TALUDES R2', tipo:'MP'},
+    {a:'REP. TUBERIA RESERVORIO 2', tipo:'MC'},
+    {a:'REP. DE FLOTADOR R2', tipo:'MC'},
+    {a:'DESARM. ESCALERA RESERVORIO 2', tipo:'MC'},
+  ],
+  8000095:[
+    {a:'LAV. DE FLOCULADOR 1', tipo:'MP'},
+    {a:'REP. FLOCULADOR 1', tipo:'MC'},
+    {a:'REP. LLAVE DESCARGA FLOCULADOR 1', tipo:'MC'},
+  ],
+  8000096:[
+    {a:'LAV. DE FLOCULADOR 2', tipo:'MP'},
+    {a:'REP. FLOCULADOR 2', tipo:'MC'},
+  ],
+  8000097:[{a:'REP. FLAUTA DESCARGA SULFATO COBRE SED. 1', tipo:'MC'}],
+  8000098:[{a:'REP. FLAUTA DESCARGA SULFATO COBRE SED. 2', tipo:'MC'}],
+  8000234:[{a:'MTTO. COMPONENTES ELECTRICOS O1E1', tipo:'MP'}],
+  8000235:[{a:'MTTO. COMPONENTES ELECTRICOS O1E2', tipo:'MP'}],
+  8000111:[
+    {a:'MTTO. GE.FILTROS DE ANILLOS O1E1', tipo:'MP'},
+    {a:'REP. FUGA FILTRO ANILLO O1E1', tipo:'MC'},
+    {a:'REP. SK SPINE FILTRO ANILLO O1E1', tipo:'MC'},
+    {a:'MTTO. EMERG.FILTROS DE ANILLOS O1E1', tipo:'MC'},
+  ],
+  8000221:[{a:'INST. PUNTO DE AGUA BAT. ASPERSIÓN', tipo:'MMJ'}],
+};
+const TIPO_MTTO_LABEL = {MP:'Preventivo', MC:'Correctivo', MMJ:'Mejora'};
+// Tipo de orden SAP asociado (según hoja ACTIVIDADES: columna "Tipo")
+const TIPO_ORDEN_SAP = {MP:'OM03', MC:'OM01', MMJ:'OM04'};
+const ORDEN_SAP_COLOR = {OM03:'bg-emerald-600', OM01:'bg-red-600', OM04:'bg-violet-600'};
+
+// Maestro de personal (TRABAJADORES): Cargo + Estado definen quién puede ser Responsable o Técnico asignable
+let PERSONAL = [];
+let RESPONSABLES = [];
+let TECNICOS = [];
+let MATERIALES = [];
+
+/* =========================================================
+   FLUJO DE ESTADOS
+   Pendiente -> Programada -> En ejecución -> Completada
+   En ejecución puede pausarse por material/aprobación.
+   Cancelada es posible desde cualquier estado previo al cierre.
+   ========================================================= */
+const ESTADOS = ['Pendiente','Programada','En ejecución','Esperando material','Esperando aprobación','Completada','Cancelada'];
+const ESTADOS_TERMINALES = ['Completada','Cancelada'];
+const ESTADO_TRANSICIONES = {
+  'Pendiente':['Programada','En ejecución','Cancelada'],
+  'Programada':['En ejecución','Cancelada'],
+  'En ejecución':['Esperando material','Esperando aprobación','Completada','Cancelada'],
+  'Esperando material':['En ejecución','Cancelada'],
+  'Esperando aprobación':['En ejecución','Cancelada'],
+  'Completada':[],
+  'Cancelada':[],
+};
+const PRIORIDADES = ['Alta','Media','Baja'];
+
+/* =========================================================
+   UTILIDADES
+   ========================================================= */
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function fmtDate(d){
+  return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+let OTMS = [];
+
+/* =========================================================
+   CARGA DE DATOS REALES DESDE EL GOOGLE SHEET
+   ========================================================= */
+async function loadDataFromSheet(){
+  const data = await apiGet(); // { equipos, actividades, personal, materiales, otms }
+
+  EQUIPOS = data.equipos;
+  ACTIVIDADES = data.actividades;
+  PERSONAL = data.personal;
+  RESPONSABLES = PERSONAL.filter(p=>p.cargo==='Supervisor' && p.estado==='Activo').map(p=>p.nombre);
+  TECNICOS = PERSONAL.filter(p=>p.cargo==='Técnico' && p.estado==='Activo').map(p=>p.nombre);
+  MATERIALES = data.materiales;
+
+  OTMS = data.otms.map(o=>({
+    ...o,
+    fecha: new Date(o.fecha),
+    historial: (o.historial||[]).map(h=>({estado:h.estado, fecha:new Date(h.fecha)})),
+  }));
+  OTMS.sort((a,b)=> b.fecha - a.fecha);
+}
+
+async function initApp(){
+  const root = document.getElementById('view-gestion');
+  root.innerHTML = `<div class="flex items-center justify-center py-24 text-ink-400 text-sm">Cargando datos desde Google Sheets…</div>`;
+  try{
+    await loadDataFromSheet();
+    renderGestion();
+  }catch(err){
+    console.error(err);
+    root.innerHTML = `<div class="bg-white rounded-xl shadow-card border border-red-200 p-6 text-sm text-red-700">
+      No se pudo cargar la información desde el Sheet.<br>
+      <span class="text-ink-500">${err.message}</span><br><br>
+      Verifica que <code>CONFIG.API_URL</code> apunte a tu Apps Script publicado y que el acceso esté configurado como "Cualquier usuario".
+      <div class="mt-3"><button onclick="initApp()" class="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-medium">Reintentar</button></div>
+    </div>`;
+  }
+}
+
+/* =========================================================
+   NAVEGACIÓN
+   ========================================================= */
+const TITLES = {
+  dashboard:['Dashboard','Indicadores de gestión de mantenimiento (adicional)'],
+  crear:['Reportar OTM','Registra el trabajo: personal y materiales se pueden completar después'],
+  gestion:['OTM del día','Consulta, ejecuta y cierra las órdenes registradas'],
+  materiales:['Materiales','Catálogo, stock y asociación de materiales a una OTM'],
+};
+
+function navigate(view){
+  document.querySelectorAll('[id^="view-"]').forEach(el=>el.classList.add('hidden'));
+  document.getElementById('view-'+view).classList.remove('hidden');
+  document.querySelectorAll('.nav-link').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
+  document.getElementById('pageTitle').textContent = TITLES[view][0];
+  document.getElementById('pageSubtitle').textContent = TITLES[view][1];
+  if(view==='dashboard') renderDashboard();
+  if(view==='crear') renderCrear();
+  if(view==='gestion') renderGestion();
+  if(view==='materiales') renderMateriales();
+  if(window.innerWidth < 1024){ document.getElementById('sidebar').classList.add('-translate-x-full'); document.getElementById('sidebarOverlay').classList.add('hidden'); }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('-translate-x-full');
+  document.getElementById('sidebarOverlay').classList.toggle('hidden');
+}
+function toast(msg, type='success'){
+  const colors = {success:'bg-emerald-600', error:'bg-red-600', info:'bg-brand-600'};
+  const el = document.createElement('div');
+  el.className = `toast ${colors[type]} text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-pop flex items-center gap-2 max-w-sm`;
+  el.innerHTML = `<span>${msg}</span>`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3200);
+}
+
+/* Badges */
+function badgeEstado(estado){
+  const map = {
+    'Pendiente':'bg-ink-100 text-ink-600 ring-1 ring-ink-200',
+    'Programada':'bg-brand-50 text-brand-700 ring-1 ring-brand-200',
+    'En ejecución':'bg-blue-600 text-white ring-1 ring-blue-600',
+    'Esperando material':'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
+    'Esperando aprobación':'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+    'Completada':'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+    'Cancelada':'bg-red-50 text-red-700 ring-1 ring-red-200',
+  };
+  const dot = {
+    'Pendiente':'bg-ink-400','Programada':'bg-brand-500','En ejecución':'bg-white',
+    'Esperando material':'bg-orange-500','Esperando aprobación':'bg-violet-500',
+    'Completada':'bg-emerald-500','Cancelada':'bg-red-500'
+  };
+  return `<span class="chip px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${map[estado]}"><span class="w-1.5 h-1.5 rounded-full ${dot[estado]}"></span>${estado}</span>`;
+}
+function badgePrioridad(p){
+  const map = {
+    'Alta':'bg-red-50 text-red-700 ring-1 ring-red-200',
+    'Media':'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+    'Baja':'bg-ink-100 text-ink-600 ring-1 ring-ink-200',
+  };
+  return `<span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${map[p]}">${p}</span>`;
+}
+function badgeTipoMtto(t){
+  const map = {MP:'bg-emerald-50 text-emerald-700', MC:'bg-orange-50 text-orange-700', MMJ:'bg-violet-50 text-violet-700'};
+  return `<span class="chip px-2 py-0.5 rounded-md text-[11px] font-semibold ${map[t]}">${TIPO_MTTO_LABEL[t]}</span>`;
+}
+function badgeOrdenSAP(t){
+  const orden = TIPO_ORDEN_SAP[t] || 'OM0X';
+  return `<span class="chip px-2 py-0.5 rounded-md text-[10px] font-bold text-white ${ORDEN_SAP_COLOR[orden]||'bg-ink-500'}">${orden}</span>`;
+}
+function esConFuga(o){
+  return /fuga/i.test(o.sintoma||'') || /fuga/i.test(o.comentarios||'') || /fuga/i.test(o.actividad||'');
+}
+
+/* =========================================================
+   AUTOCOMPLETADO GENÉRICO (equipo, actividad, material)
+   ========================================================= */
+function wireAutocomplete({inputId, listId, itemsProvider, onPick, emptyText}){
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  if(!input || !list) return;
+  function show(query){
+    if(input.disabled) return;
+    const items = itemsProvider();
+    const q = (query||'').toLowerCase();
+    const filtered = items.filter(it=> it.label.toLowerCase().includes(q));
+    if(filtered.length===0){
+      list.innerHTML = `<div class="px-3 py-2 text-xs text-ink-400">${emptyText||'Sin resultados'}</div>`;
+    } else {
+      list.innerHTML = filtered.slice(0,60).map(it=>`<div class="ac-opt px-3 py-2 text-sm hover:bg-brand-50 cursor-pointer" data-value="${it.value}" data-label="${it.label.replace(/"/g,'&quot;')}">${it.label}</div>`).join('');
+    }
+    list.classList.remove('hidden');
+  }
+  input.addEventListener('focus', ()=> show(input.value));
+  input.addEventListener('input', ()=> show(input.value));
+  list.addEventListener('mousedown', (e)=>{
+    const opt = e.target.closest('.ac-opt');
+    if(!opt) return;
+    input.value = opt.dataset.label;
+    list.classList.add('hidden');
+    onPick(opt.dataset.value, opt.dataset.label);
+  });
+  document.addEventListener('click', (e)=>{
+    if(e.target!==input && !list.contains(e.target)) list.classList.add('hidden');
+  });
+}
+
+/* =========================================================
+   DASHBOARD (indicadores — módulo adicional)
+   ========================================================= */
+let dashboardFilter = {estado:null, tipo:null, prioridad:null, responsable:null};
+function applyDashboardFilter(list){
+  return list.filter(o=>{
+    if(dashboardFilter.estado && o.estado!==dashboardFilter.estado) return false;
+    if(dashboardFilter.tipo && o.tipoMtto!==dashboardFilter.tipo) return false;
+    if(dashboardFilter.prioridad && o.prioridad!==dashboardFilter.prioridad) return false;
+    if(dashboardFilter.responsable && o.responsable!==dashboardFilter.responsable) return false;
+    return true;
+  });
+}
+function setDashFilter(key, value){
+  dashboardFilter[key] = (dashboardFilter[key]===value) ? null : value;
+  renderDashboard();
+}
+function clearDashFilter(){
+  dashboardFilter = {estado:null, tipo:null, prioridad:null, responsable:null};
+  renderDashboard();
+}
+
+function renderDashboard(){
+  const total = OTMS.length;
+  const pendProg = OTMS.filter(o=>o.estado==='Pendiente'||o.estado==='Programada').length;
+  const enEjecucion = OTMS.filter(o=>o.estado==='En ejecución').length;
+  const esperando = OTMS.filter(o=>o.estado==='Esperando material'||o.estado==='Esperando aprobación').length;
+  const completadas = OTMS.filter(o=>o.estado==='Completada').length;
+  const hh = OTMS.reduce((s,o)=>s+o.hh,0).toFixed(0);
+
+  const estadoCount = {};
+  ESTADOS.forEach(e=> estadoCount[e]=0);
+  OTMS.forEach(o=> estadoCount[o.estado]++);
+  const maxEstado = Math.max(...Object.values(estadoCount),1);
+  const estadoColor = {'Pendiente':'#c7d0da','Programada':'#4aa4ff','En ejecución':'#0a6ed1','Esperando material':'#f59e0b','Esperando aprobación':'#8b5cf6','Completada':'#10b981','Cancelada':'#ef4444'};
+
+  const tipoCount = {MP:0,MC:0,MMJ:0};
+  OTMS.forEach(o=> tipoCount[o.tipoMtto]++);
+  const tTotal = OTMS.length || 1;
+  const p1 = tipoCount.MP/tTotal*100, p2 = tipoCount.MC/tTotal*100, p3 = tipoCount.MMJ/tTotal*100;
+
+  const prioCount = {};
+  PRIORIDADES.forEach(p=> prioCount[p]=0);
+  OTMS.forEach(o=> prioCount[o.prioridad]++);
+  const maxPrio = Math.max(...Object.values(prioCount),1);
+  const prioColor = {'Alta':'#ef4444','Media':'#f59e0b','Baja':'#c7d0da'};
+
+  const respCount = {};
+  RESPONSABLES.forEach(r=> respCount[r]=0);
+  OTMS.forEach(o=> respCount[o.responsable] = (respCount[o.responsable]||0)+1);
+  const maxResp = Math.max(...Object.values(respCount),1);
+
+  const materialUso = {};
+  OTMS.forEach(o=> o.materiales.forEach(m=>{ materialUso[m.desc] = (materialUso[m.desc]||0) + m.cantidad; }));
+  let materialesUso = Object.entries(materialUso).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if(materialesUso.length===0) materialesUso = MATERIALES.slice(0,5).map(m=>[m.desc,0]);
+  const maxUso = Math.max(...materialesUso.map(m=>m[1]),1);
+
+  const equipoCount = {};
+  OTMS.forEach(o=> equipoCount[o.equipo] = (equipoCount[o.equipo]||0)+1);
+  const topEquipos = Object.entries(equipoCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxEq = Math.max(...topEquipos.map(e=>e[1]),1);
+
+  const filtered = applyDashboardFilter(OTMS);
+  const filtroActivo = Object.values(dashboardFilter).some(v=>v);
+
+  document.getElementById('view-dashboard').innerHTML = `
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4 mb-5">
+      ${kpiCard('Total OTM', total, 'de todos los estados', 'brand', iconClip())}
+      ${kpiCard('Pendientes / Programadas', pendProg, 'por iniciar', 'ink', iconClock())}
+      ${kpiCard('En ejecución', enEjecucion, 'trabajos en curso', 'blue', iconWrench())}
+      ${kpiCard('Esperando material/aprob.', esperando, 'trabajos en pausa', 'amber', iconPause())}
+      ${kpiCard('Completadas', completadas, 'finalizadas en el periodo', 'emerald', iconCheck())}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 mb-5">
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5 sm:col-span-1">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon bg-violet-50 text-violet-600">${iconUsers()}</div>
+        </div>
+        <p class="text-2xl lg:text-3xl font-bold text-ink-900 leading-none">${hh} h</p>
+        <p class="text-xs lg:text-sm font-medium text-ink-600 mt-1.5">Horas Hombre registradas</p>
+        <p class="text-[11px] text-ink-400 mt-0.5">Jornales × horas ejecutadas al cierre</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+      <div class="lg:col-span-2 bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="font-semibold text-ink-900 text-sm">OTM por estado</h3>
+            <p class="text-xs text-ink-400">Clic en una barra para filtrar la tabla inferior</p>
+          </div>
+        </div>
+        <div class="space-y-2.5">
+          ${ESTADOS.map(e=>`
+            <button onclick="setDashFilter('estado','${e}')" class="filter-bar-btn w-full text-left ${dashboardFilter.estado && dashboardFilter.estado!==e ? 'dimmed':''}">
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-ink-600 flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${estadoColor[e]}"></span>${e}</span>
+                <span class="font-medium text-ink-800">${estadoCount[e]}</span>
+              </div>
+              <div class="w-full bg-ink-100 rounded-full h-2">
+                <div class="bar h-2 rounded-full" style="width:${(estadoCount[e]/maxEstado*100)}%; background:${estadoColor[e]}"></div>
+              </div>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <h3 class="font-semibold text-ink-900 text-sm mb-1">OTM por tipo de mantenimiento</h3>
+        <p class="text-xs text-ink-400 mb-4">Preventivo / Correctivo / Mejora</p>
+        <div class="flex items-center justify-center py-2">
+          <svg viewBox="0 0 42 42" class="w-36 h-36 -rotate-90">
+            <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#e8ecf1" stroke-width="6"></circle>
+            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#0a6ed1" stroke-width="6"
+              stroke-dasharray="${p1} ${100-p1}" stroke-dashoffset="0"></circle>
+            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#f59e0b" stroke-width="6"
+              stroke-dasharray="${p2} ${100-p2}" stroke-dashoffset="${-p1}"></circle>
+            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#8b5cf6" stroke-width="6"
+              stroke-dasharray="${p3} ${100-p3}" stroke-dashoffset="${-(p1+p2)}"></circle>
+          </svg>
+        </div>
+        <div class="space-y-1.5 text-xs mt-1">
+          <button onclick="setDashFilter('tipo','MP')" class="filter-bar-btn w-full flex justify-between items-center ${dashboardFilter.tipo && dashboardFilter.tipo!=='MP' ? 'dimmed':''}"><span class="flex items-center gap-1.5 text-ink-500"><span class="w-2.5 h-2.5 rounded-full bg-brand-500"></span>Preventivo</span><span class="font-medium text-ink-800">${tipoCount.MP}</span></button>
+          <button onclick="setDashFilter('tipo','MC')" class="filter-bar-btn w-full flex justify-between items-center ${dashboardFilter.tipo && dashboardFilter.tipo!=='MC' ? 'dimmed':''}"><span class="flex items-center gap-1.5 text-ink-500"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>Correctivo</span><span class="font-medium text-ink-800">${tipoCount.MC}</span></button>
+          <button onclick="setDashFilter('tipo','MMJ')" class="filter-bar-btn w-full flex justify-between items-center ${dashboardFilter.tipo && dashboardFilter.tipo!=='MMJ' ? 'dimmed':''}"><span class="flex items-center gap-1.5 text-ink-500"><span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>Mejora</span><span class="font-medium text-ink-800">${tipoCount.MMJ}</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <h3 class="font-semibold text-ink-900 text-sm mb-1">OTM por responsable</h3>
+        <p class="text-xs text-ink-400 mb-4">Carga de trabajo por supervisor</p>
+        <div class="space-y-3">
+          ${RESPONSABLES.map(r=>`
+            <button onclick="setDashFilter('responsable','${r}')" class="filter-bar-btn w-full text-left ${dashboardFilter.responsable && dashboardFilter.responsable!==r ? 'dimmed':''}">
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-ink-600">${r}</span>
+                <span class="font-medium text-ink-800">${respCount[r]||0}</span>
+              </div>
+              <div class="w-full bg-ink-100 rounded-full h-2">
+                <div class="bg-brand-500 h-2 rounded-full bar" style="width:${((respCount[r]||0)/maxResp*100)}%"></div>
+              </div>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <h3 class="font-semibold text-ink-900 text-sm mb-1">Materiales más utilizados</h3>
+        <p class="text-xs text-ink-400 mb-4">Unidades consumidas en OTM registradas</p>
+        <div class="space-y-3">
+          ${materialesUso.map(([nombre,usos])=>`
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-ink-600">${nombre.length>26? nombre.slice(0,26)+'…':nombre}</span>
+                <span class="font-medium text-ink-800">${usos}</span>
+              </div>
+              <div class="w-full bg-ink-100 rounded-full h-2">
+                <div class="bg-emerald-500 h-2 rounded-full bar" style="width:${(usos/maxUso*100)}%"></div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <h3 class="font-semibold text-ink-900 text-sm mb-1">Equipos con más intervenciones</h3>
+        <p class="text-xs text-ink-400 mb-4">OTM registradas por activo</p>
+        <div class="space-y-3">
+          ${topEquipos.map(([nombre,count])=>`
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-ink-600">${nombre.length>24?nombre.slice(0,24)+'…':nombre}</span>
+                <span class="font-medium text-ink-800">${count}</span>
+              </div>
+              <div class="w-full bg-ink-100 rounded-full h-2">
+                <div class="bg-violet-500 h-2 rounded-full bar" style="width:${(count/maxEq*100)}%"></div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 class="font-semibold text-ink-900 text-sm">OTM ${filtroActivo? 'filtradas':'recientes'}</h3>
+        <div class="flex items-center gap-2">
+          ${filtroActivo ? `<button onclick="clearDashFilter()" class="text-xs font-medium text-ink-500 hover:text-ink-700 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>Quitar filtro</button>` : ''}
+          <button onclick="navigate('gestion')" class="text-xs font-medium text-brand-600 hover:text-brand-700">Ver todas →</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-ink-400 text-xs border-b border-ink-100">
+              <th class="py-2 font-medium">OTM</th>
+              <th class="py-2 font-medium">Fecha</th>
+              <th class="py-2 font-medium">Equipo</th>
+              <th class="py-2 font-medium">Responsable</th>
+              <th class="py-2 font-medium">Prioridad</th>
+              <th class="py-2 font-medium">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.slice(0,8).map(o=>`
+              <tr class="border-b border-ink-50 cursor-pointer hover:bg-ink-50/60" onclick="navigate('gestion')">
+                <td class="py-2.5 font-medium text-ink-800">${o.id}</td>
+                <td class="py-2.5 text-ink-500 whitespace-nowrap">${fmtDate(o.fecha)}</td>
+                <td class="py-2.5 text-ink-600">${o.equipo}</td>
+                <td class="py-2.5 text-ink-600 whitespace-nowrap">${o.responsable}</td>
+                <td class="py-2.5">${badgePrioridad(o.prioridad)}</td>
+                <td class="py-2.5">${badgeEstado(o.estado)}</td>
+              </tr>`).join('') || `<tr><td colspan="6" class="text-center py-8 text-ink-400">No hay OTM que coincidan con el filtro seleccionado.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function kpiCard(label, value, sub, color, icon){
+  const colors = {
+    brand:'bg-brand-50 text-brand-600', amber:'bg-amber-50 text-amber-600',
+    emerald:'bg-emerald-50 text-emerald-600', violet:'bg-violet-50 text-violet-600',
+    ink:'bg-ink-100 text-ink-600', blue:'bg-blue-50 text-blue-600'
+  };
+  return `
+  <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+    <div class="flex items-start justify-between mb-3">
+      <div class="kpi-icon ${colors[color]}">${icon}</div>
+    </div>
+    <p class="text-2xl lg:text-3xl font-bold text-ink-900 leading-none">${value}</p>
+    <p class="text-xs lg:text-sm font-medium text-ink-600 mt-1.5">${label}</p>
+    <p class="text-[11px] text-ink-400 mt-0.5">${sub}</p>
+  </div>`;
+}
+function iconClip(){return `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M9 8h6M5 4.5h14a1 1 0 011 1V19a1 1 0 01-1 1H5a1 1 0 01-1-1V5.5a1 1 0 011-1z"/></svg>`;}
+function iconClock(){return `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/></svg>`;}
+function iconCheck(){return `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75l2.25 2.25L15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;}
+function iconUsers(){return `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.7M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0112.749 0zM4.5 9.75a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM19.5 8.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>`;}
+function iconWrench(){return `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26"/></svg>`;}
+function iconPause(){return `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;}
+
+/* =========================================================
+   REPORTAR OTM (creación simplificada de campo)
+   ========================================================= */
+let crearState = {
+  equipoDni: '', actividadNombre: '', actividadTipo: '',
+  actividadLibre: false,
+  selectedTecnicos: [], externoActivo: false,
+  materiales: [],
+};
+
+function renderCrear(){
+  crearState = { equipoDni:'', actividadNombre:'', actividadTipo:'', actividadLibre:false, selectedTecnicos:[], externoActivo:false, materiales:[] };
+  document.getElementById('view-crear').innerHTML = `
+  <div class="bg-white rounded-xl shadow-card border border-ink-100 max-w-3xl mx-auto">
+    <div class="px-5 lg:px-8 py-5 border-b border-ink-100">
+      <h2 class="font-semibold text-ink-900">Reportar nueva OTM</h2>
+      <p class="text-xs text-ink-400 mt-0.5">Los campos con * son obligatorios. El tipo de mantenimiento se calcula automáticamente según la actividad elegida. Personal y materiales pueden completarse ahora o luego, desde "OTM del día".</p>
+    </div>
+
+    <form id="otmForm" class="px-5 lg:px-8 py-6 space-y-6" onsubmit="return submitOTM(event)">
+
+      <!-- Datos del trabajo -->
+      <div>
+        <h3 class="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-3">Datos del trabajo</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="relative">
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Equipo / Activo *</label>
+            <input type="text" id="ac_input_equipo" autocomplete="off" placeholder="Escribe para buscar el equipo…"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <div id="ac_list_equipo" class="ac-list hidden"></div>
+            <input type="hidden" id="f_dni">
+          </div>
+          <div class="relative">
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Actividad *</label>
+            <input type="text" id="ac_input_actividad" autocomplete="off" disabled placeholder="Primero elige un equipo…"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm disabled:bg-ink-50 disabled:text-ink-400">
+            <div id="ac_list_actividad" class="ac-list hidden"></div>
+            <button type="button" id="btnActividadLibre" onclick="toggleActividadLibre()" class="mt-1.5 text-xs text-brand-600 hover:text-brand-700 underline">¿No encuentras la actividad? Usa texto libre</button>
+          </div>
+        </div>
+
+        <div id="actividadLibrePanel" class="hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-brand-50/50 border border-brand-100 rounded-lg p-4">
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Nombre de la nueva actividad *</label>
+            <input type="text" id="f_actividad_libre_nombre" placeholder="Describe la actividad realizada"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Tipo de mantenimiento (OT) *</label>
+            <select id="f_actividad_libre_tipo" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <option value="MP">Preventivo (MP)</option>
+              <option value="MC">Correctivo (MC)</option>
+              <option value="MMJ">Mejora (MMJ)</option>
+            </select>
+          </div>
+          <p class="sm:col-span-2 text-[11px] text-ink-500">Esta actividad quedará disponible para este equipo en próximas OTM.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Tipo de mantenimiento</label>
+            <input type="text" id="f_tipo_mtto" disabled placeholder="Automático según actividad"
+              class="w-full border border-ink-200 bg-ink-50 rounded-lg px-3 py-2 text-sm text-ink-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Fecha de la OTM *</label>
+            <input type="date" id="f_fecha" required value="${new Date().toISOString().slice(0,10)}"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Prioridad *</label>
+          <div class="flex gap-2">
+            ${PRIORIDADES.map((p,i)=>`
+              <button type="button" onclick="selectChip(this,'prioridad','${p}')" data-group="prioridad" data-value="${p}"
+                class="chip-prioridad px-4 py-2 rounded-lg text-sm font-medium border ${i===1?'bg-ink-800 text-white border-ink-800':'border-ink-200 text-ink-600'}">${p}</button>`).join('')}
+          </div>
+          <input type="hidden" id="f_prioridad" value="Media">
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Supervisor responsable *</label>
+          <div class="flex flex-wrap gap-2">
+            ${RESPONSABLES.map((r,i)=>`
+              <button type="button" onclick="selectChip(this,'responsable','${r}')" data-group="responsable" data-value="${r}"
+                class="chip-responsable px-4 py-2 rounded-lg text-sm font-medium border ${i===0?'bg-ink-800 text-white border-ink-800':'border-ink-200 text-ink-600'}">${r}</button>`).join('')}
+          </div>
+          <input type="hidden" id="f_responsable" value="${RESPONSABLES[0]}">
+        </div>
+      </div>
+
+      <!-- Diagnóstico -->
+      <div>
+        <h3 class="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-3">Diagnóstico</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Componente afectado</label>
+            <input type="text" id="f_componente" placeholder="Ej. Válvula principal"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Síntoma de avería</label>
+            <input type="text" id="f_sintoma" placeholder="Ej. Fuga en unión de tubería"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Causa de avería</label>
+            <input type="text" id="f_causa" placeholder="Ej. Desgaste por uso"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Medida a tomar</label>
+            <input type="text" id="f_medida" placeholder="Ej. Reparación en sitio"
+              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
+      </div>
+
+      <!-- Personal asignado (opcional) -->
+      <div>
+        <div class="flex items-baseline justify-between mb-3">
+          <h3 class="text-xs font-semibold text-ink-400 uppercase tracking-wide">Personal asignado</h3>
+          <span class="text-[11px] text-ink-400">Opcional — puedes asignarlo ahora o al final del día</span>
+        </div>
+        <div class="border border-ink-200 rounded-lg p-4">
+          <div class="flex flex-wrap gap-2 mb-2">
+            ${TECNICOS.map(t=>`
+              <button type="button" onclick="toggleTecnico(this,'${t}')"
+                class="tecnico-chip px-3 py-1.5 rounded-full text-xs font-medium border border-ink-200 text-ink-600 hover:border-brand-400 hover:text-brand-600 transition">
+                ${t}
+              </button>`).join('')}
+          </div>
+          <p class="text-xs text-ink-400 mb-3">Seleccionados: <span id="tecnicosCount" class="font-medium text-ink-600">0</span></p>
+
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="f_externo" onchange="toggleExterno()" class="w-4 h-4 rounded border-ink-300 text-brand-600">
+            <span class="text-sm font-medium text-ink-700">Incluir personal externo</span>
+          </label>
+          <div id="externoFields" class="hidden mt-3 pt-3 border-t border-ink-100">
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad de externos *</label>
+            <input type="number" id="f_cant_externos" min="1" value="1"
+              class="w-full sm:w-40 border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
+      </div>
+
+      <!-- Materiales a reservar -->
+      <div>
+        <div class="flex items-baseline justify-between mb-3">
+          <h3 class="text-xs font-semibold text-ink-400 uppercase tracking-wide">Materiales a reservar</h3>
+          <span class="text-[11px] text-ink-400">Opcional</span>
+        </div>
+        <div class="border border-ink-200 rounded-lg p-4">
+          <div id="materialesFormList" class="space-y-2"></div>
+          <div id="materialAddFields" class="hidden mt-1">
+            <div class="relative">
+              <div class="flex gap-2">
+                <input type="text" id="ac_input_material" autocomplete="off" placeholder="Buscar material por código o nombre…"
+                  class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+                <button type="button" onclick="clearMaterialInput()" class="px-3 border border-ink-200 rounded-lg text-ink-400 hover:text-ink-700">✕</button>
+              </div>
+              <div id="ac_list_material" class="ac-list hidden"></div>
+              <input type="hidden" id="f_material_codigo">
+            </div>
+            <div class="mt-3 flex items-center gap-3">
+              <label class="text-sm font-medium text-ink-700">Cantidad</label>
+              <input type="number" id="f_material_cant" min="1" value="1" class="w-24 border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="flex gap-2 mt-3">
+              <button type="button" onclick="agregarMaterialForm()" class="px-4 py-2 rounded-lg bg-ink-800 hover:bg-ink-900 text-white text-sm font-medium">Agregar</button>
+              <button type="button" onclick="cerrarMaterialForm()" class="px-4 py-2 rounded-lg border border-ink-200 text-ink-600 text-sm font-medium hover:bg-ink-50">Cancelar</button>
+            </div>
+          </div>
+          <button type="button" id="btnAbrirMaterialForm" onclick="abrirMaterialForm()" class="mt-3 px-4 py-2 rounded-lg border border-dashed border-ink-300 text-ink-600 text-sm font-medium hover:border-brand-400 hover:text-brand-600">+ Agregar material</button>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+        <button type="button" onclick="navigate('gestion')" class="px-4 py-2.5 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+        <button type="button" onclick="registrarYCompartirWhatsApp()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-card">${iconWhatsapp()} Registrar y enviar por WhatsApp</button>
+        <button type="submit" class="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium shadow-card">Registrar OTM</button>
+      </div>
+    </form>
+  </div>
+  `;
+  paintMaterialesForm();
+  wireCrearAutocompletes();
+}
+
+function wireCrearAutocompletes(){
+  wireAutocomplete({
+    inputId:'ac_input_equipo', listId:'ac_list_equipo',
+    itemsProvider: ()=> EQUIPOS.map(e=>({value:String(e.dni), label:e.nombre})),
+    onPick: (dni)=>{
+      crearState.equipoDni = dni;
+      document.getElementById('f_dni').value = dni;
+      crearState.actividadNombre=''; crearState.actividadTipo='';
+      const actInput = document.getElementById('ac_input_actividad');
+      actInput.value=''; actInput.disabled=false; actInput.placeholder='Escribe para buscar la actividad…';
+      document.getElementById('f_tipo_mtto').value='';
+      document.getElementById('actividadLibrePanel').classList.add('hidden');
+      crearState.actividadLibre=false;
+    },
+    emptyText:'No se encontró el equipo'
+  });
+  wireAutocomplete({
+    inputId:'ac_input_actividad', listId:'ac_list_actividad',
+    itemsProvider: ()=> crearState.equipoDni ? (ACTIVIDADES[crearState.equipoDni]||[]).map(a=>({value:a.tipo, label:a.a})) : [],
+    onPick: (tipo,label)=>{
+      crearState.actividadNombre = label;
+      crearState.actividadTipo = tipo;
+      crearState.actividadLibre = false;
+      document.getElementById('actividadLibrePanel').classList.add('hidden');
+      document.getElementById('f_tipo_mtto').value = TIPO_MTTO_LABEL[tipo];
+    },
+    emptyText:'No hay actividades registradas para este equipo'
+  });
+  wireAutocomplete({
+    inputId:'ac_input_material', listId:'ac_list_material',
+    itemsProvider: ()=> MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad})`})),
+    onPick: (codigo)=>{ document.getElementById('f_material_codigo').value = codigo; },
+    emptyText:'No se encontró el material'
+  });
+}
+
+function toggleActividadLibre(){
+  crearState.actividadLibre = !crearState.actividadLibre;
+  document.getElementById('actividadLibrePanel').classList.toggle('hidden', !crearState.actividadLibre);
+  if(crearState.actividadLibre){
+    document.getElementById('ac_input_actividad').value='';
+    crearState.actividadNombre=''; crearState.actividadTipo='';
+    document.getElementById('f_tipo_mtto').value='';
+  }
+}
+function selectChip(btn, group, value){
+  document.querySelectorAll(`[data-group="${group}"]`).forEach(b=>{
+    b.classList.remove('bg-ink-800','text-white','border-ink-800');
+    b.classList.add('border-ink-200','text-ink-600');
+  });
+  btn.classList.add('bg-ink-800','text-white','border-ink-800');
+  btn.classList.remove('border-ink-200','text-ink-600');
+  document.getElementById('f_'+group).value = value;
+}
+function toggleTecnico(btn, nombre){
+  const idx = crearState.selectedTecnicos.indexOf(nombre);
+  if(idx>-1){ crearState.selectedTecnicos.splice(idx,1); btn.classList.remove('bg-brand-600','text-white','border-brand-600'); btn.classList.add('border-ink-200','text-ink-600'); }
+  else { crearState.selectedTecnicos.push(nombre); btn.classList.add('bg-brand-600','text-white','border-brand-600'); btn.classList.remove('border-ink-200','text-ink-600'); }
+  document.getElementById('tecnicosCount').textContent = crearState.selectedTecnicos.length;
+}
+function toggleExterno(){
+  crearState.externoActivo = document.getElementById('f_externo').checked;
+  document.getElementById('externoFields').classList.toggle('hidden', !crearState.externoActivo);
+}
+function clearMaterialInput(){
+  document.getElementById('ac_input_material').value='';
+  document.getElementById('f_material_codigo').value='';
+}
+function abrirMaterialForm(){
+  document.getElementById('materialAddFields').classList.remove('hidden');
+  document.getElementById('btnAbrirMaterialForm').classList.add('hidden');
+  document.getElementById('ac_input_material').focus();
+}
+function cerrarMaterialForm(){
+  clearMaterialInput();
+  document.getElementById('f_material_cant').value = 1;
+  document.getElementById('materialAddFields').classList.add('hidden');
+  document.getElementById('btnAbrirMaterialForm').classList.remove('hidden');
+}
+function agregarMaterialForm(){
+  const codigo = document.getElementById('f_material_codigo').value;
+  const cant = parseInt(document.getElementById('f_material_cant').value)||1;
+  if(!codigo){ toast('Selecciona un material de la lista', 'error'); return; }
+  const m = MATERIALES.find(x=>x.codigo===codigo);
+  crearState.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, stock:m.stock});
+  paintMaterialesForm();
+  cerrarMaterialForm();
+}
+function quitarMaterialForm(i){
+  crearState.materiales.splice(i,1);
+  paintMaterialesForm();
+}
+function paintMaterialesForm(){
+  const el = document.getElementById('materialesFormList');
+  if(!el) return;
+  if(crearState.materiales.length===0){ el.innerHTML = ''; return; }
+  el.innerHTML = crearState.materiales.map((m,i)=>`
+    <div class="flex items-center justify-between gap-3 bg-ink-50 rounded-lg px-3 py-2 text-sm">
+      <div class="min-w-0">
+        <p class="font-medium text-ink-800 truncate">${m.codigo} · ${m.desc}</p>
+        <p class="text-xs text-ink-400">Cantidad: ${m.cantidad} ${m.unidad}
+          ${m.cantidad > m.stock ? `<span class="ml-1.5 text-amber-600 font-medium">⚠ stock disponible: ${m.stock}</span>` : ''}
+        </p>
+      </div>
+      <button type="button" onclick="quitarMaterialForm(${i})" class="text-ink-400 hover:text-red-600 flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function construirOTMDesdeFormulario(){
+  const equipo = EQUIPOS.find(x=>String(x.dni)===crearState.equipoDni);
+  if(!equipo){ toast('Selecciona un equipo de la lista', 'error'); return null; }
+
+  let actividadNombre, actividadTipo, esActividadLibre=false;
+  if(crearState.actividadLibre){
+    actividadNombre = document.getElementById('f_actividad_libre_nombre').value.trim();
+    actividadTipo = document.getElementById('f_actividad_libre_tipo').value;
+    esActividadLibre = true;
+    if(!actividadNombre){ toast('Escribe el nombre de la nueva actividad', 'error'); return null; }
+    if(!ACTIVIDADES[crearState.equipoDni]) ACTIVIDADES[crearState.equipoDni] = [];
+    ACTIVIDADES[crearState.equipoDni].push({a:actividadNombre, tipo:actividadTipo});
+    apiPost('nueva_actividad', {dni:crearState.equipoDni, actividad:actividadNombre, tipo:actividadTipo})
+      .catch(err=>{ console.error(err); toast('No se pudo guardar la nueva actividad en el Sheet: '+err.message, 'error'); });
+  } else {
+    actividadNombre = crearState.actividadNombre;
+    actividadTipo = crearState.actividadTipo;
+    if(!actividadNombre){ toast('Selecciona una actividad o usa texto libre', 'error'); return null; }
+  }
+
+  if(crearState.externoActivo){
+    const cantExt = parseInt(document.getElementById('f_cant_externos').value)||0;
+    if(cantExt < 1){ toast('La cantidad de externos debe ser mayor o igual a 1', 'error'); return null; }
+  }
+
+  const internos = crearState.selectedTecnicos.length;
+  const externos = crearState.externoActivo ? Math.max(1, parseInt(document.getElementById('f_cant_externos').value)||0) : 0;
+  const participantes = internos + externos;
+  const fecha = new Date(document.getElementById('f_fecha').value);
+
+  return {
+    id: `OTM-${Date.now().toString().slice(-6)}-${OTMS.length+1}`,
+    fecha,
+    equipo: equipo.nombre,
+    dni: equipo.dni,
+    actividad: actividadNombre,
+    esActividadLibre,
+    tipoMtto: actividadTipo,
+    prioridad: document.getElementById('f_prioridad').value,
+    responsable: document.getElementById('f_responsable').value,
+    estado: 'Pendiente',
+    internos, externos, participantes,
+    empresaContratista: null,
+    componente: document.getElementById('f_componente').value || '—',
+    sintoma: document.getElementById('f_sintoma').value || '—',
+    causa: document.getElementById('f_causa').value || '—',
+    medida: document.getElementById('f_medida').value || '—',
+    actividadRealizada: '',
+    comentarios: '—',
+    comentarioCierre: '',
+    jornalesEjecutados: null, horasEjecutadas: null, hh: 0,
+    personalAsignado: [...crearState.selectedTecnicos],
+    materiales: crearState.materiales.map(m=>({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:m.cantidad})),
+    historial: [{estado:'Pendiente', fecha}],
+  };
+}
+
+function submitOTM(e){
+  e.preventDefault();
+  const nueva = construirOTMDesdeFormulario();
+  if(!nueva) return false;
+  OTMS.unshift(nueva);
+  syncOTM(nueva);
+  toast(`OTM ${nueva.id} registrada en estado Pendiente`);
+  navigate('gestion');
+  return false;
+}
+
+function mensajeWhatsAppOTM(o){
+  const lineas = [
+    `🛠️ *Nueva OTM registrada*`,
+    `📋 *OTM:* ${o.id}`,
+    `⚙️ *Equipo:* ${o.equipo}`,
+    `🔢 *DNI:* ${o.dni}`,
+    `🧰 *Actividad:* ${o.actividad}`,
+    `🏷️ *Tipo:* ${TIPO_MTTO_LABEL[o.tipoMtto]} (${TIPO_ORDEN_SAP[o.tipoMtto]})`,
+    `🚦 *Prioridad:* ${o.prioridad}`,
+    `👷 *Responsable:* ${o.responsable}`,
+    `📅 *Fecha:* ${fmtDate(o.fecha)}`,
+  ];
+  if(o.materiales && o.materiales.length){
+    lineas.push(`📦 *Materiales solicitados:*`);
+    o.materiales.forEach(m=>{
+      lineas.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`);
+    });
+  }
+  return lineas.join('\n');
+}
+function registrarYCompartirWhatsApp(){
+  const nueva = construirOTMDesdeFormulario();
+  if(!nueva) return;
+  OTMS.unshift(nueva);
+  syncOTM(nueva);
+  toast(`OTM ${nueva.id} registrada en estado Pendiente`);
+  const url = `https://wa.me/?text=${encodeURIComponent(mensajeWhatsAppOTM(nueva))}`;
+  window.open(url, '_blank');
+  navigate('gestion');
+}
+function iconWhatsapp(){
+  return `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.29-1.39a9.9 9.9 0 004.75 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0012.04 2zm0 18.13h-.01a8.2 8.2 0 01-4.18-1.14l-.3-.18-3.14.82.84-3.06-.2-.31a8.2 8.2 0 01-1.26-4.35c0-4.54 3.7-8.24 8.26-8.24 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 012.42 5.83c0 4.55-3.7 8.24-8.26 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.17.24-.64.8-.78.97-.14.17-.29.19-.53.06-.25-.12-1.04-.38-1.99-1.22-.73-.66-1.23-1.46-1.37-1.71-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.16-.25.24-.42.08-.17.04-.31-.02-.44-.06-.12-.56-1.36-.77-1.86-.2-.48-.4-.42-.56-.42-.14-.01-.31-.01-.48-.01-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.08 0 1.23.9 2.42 1.02 2.58.12.17 1.77 2.7 4.29 3.79.6.26 1.06.41 1.43.53.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.1-.23-.16-.48-.28z"/></svg>`;
+}
+
+/* =========================================================
+   OTM DEL DÍA (visualización tipo tarjeta)
+   ========================================================= */
+let gestionFecha = '';
+let gestionFiltros = {estado:'', prioridad:'', responsable:'', equipo:''};
+let gestionQuery = '';
+let filtrosAbiertos = false;
+
+function toggleFiltrosPanel(){
+  filtrosAbiertos = !filtrosAbiertos;
+  const panel = document.getElementById('filtrosPanel');
+  if(panel) panel.classList.toggle('hidden', !filtrosAbiertos);
+}
+function onFechaChange(){
+  gestionFecha = document.getElementById('filt_fecha').value;
+  paintGestionCards();
+}
+function limpiarFecha(){
+  gestionFecha = '';
+  document.getElementById('filt_fecha').value = '';
+  paintGestionCards();
+}
+
+function renderGestion(){
+  document.getElementById('view-gestion').innerHTML = `
+  <div class="bg-white rounded-xl shadow-card border border-ink-100 mb-4 overflow-hidden">
+    <div class="p-4 lg:p-5 pb-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+      <div class="relative flex-1">
+        <svg class="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/></svg>
+        <input id="filt_q" oninput="onQueryInput()" value="${gestionQuery}" type="text" placeholder="Buscar por equipo o responsable…" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-ink-500 whitespace-nowrap hidden sm:inline">Fecha:</label>
+        <input type="date" id="filt_fecha" value="${gestionFecha}" onchange="onFechaChange()" class="border border-ink-200 rounded-lg px-3 py-2 text-xs">
+        ${gestionFecha ? `<button onclick="limpiarFecha()" title="Quitar filtro de fecha" class="text-ink-400 hover:text-red-600 px-1"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>` : ''}
+      </div>
+      <div class="flex items-center gap-2 justify-between sm:justify-end">
+        <button onclick="toggleFiltrosPanel()" class="flex items-center gap-1.5 border border-ink-200 rounded-lg px-3 py-2 text-xs font-medium text-ink-600 hover:bg-ink-50">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z"/></svg>
+          Filtros
+        </button>
+        <span class="text-xs text-ink-400 whitespace-nowrap"><span id="gestionCount" class="font-medium text-ink-700">${OTMS.length}</span> órdenes</span>
+      </div>
+    </div>
+
+    <div id="filtrosPanel" class="hidden px-4 lg:px-5 pb-4 grid grid-cols-2 lg:grid-cols-4 gap-3 border-b border-ink-100">
+      <select id="filt_estado" onchange="onFiltroChange()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs">
+        <option value="">Todos los estados</option>
+        ${ESTADOS.map(s=>`<option value="${s}">${s}</option>`).join('')}
+      </select>
+      <select id="filt_prioridad" onchange="onFiltroChange()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs">
+        <option value="">Todas las prioridades</option>
+        ${PRIORIDADES.map(p=>`<option value="${p}">${p}</option>`).join('')}
+      </select>
+      <select id="filt_responsable" onchange="onFiltroChange()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs">
+        <option value="">Todos los responsables</option>
+        ${RESPONSABLES.map(r=>`<option value="${r}">${r}</option>`).join('')}
+      </select>
+      <button onclick="resetFiltros()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs font-medium text-ink-600 hover:bg-ink-50">Limpiar filtros</button>
+    </div>
+  </div>
+
+  <div id="otmCards" class="space-y-3"></div>
+  `;
+  document.getElementById('filtrosPanel').classList.toggle('hidden', !filtrosAbiertos);
+  paintGestionCards();
+}
+
+function onQueryInput(){ gestionQuery = document.getElementById('filt_q').value.trim().toLowerCase(); paintGestionCards(); }
+function onFiltroChange(){
+  gestionFiltros.estado = document.getElementById('filt_estado').value;
+  gestionFiltros.prioridad = document.getElementById('filt_prioridad').value;
+  gestionFiltros.responsable = document.getElementById('filt_responsable').value;
+  paintGestionCards();
+}
+function resetFiltros(){
+  gestionQuery=''; gestionFecha=''; gestionFiltros={estado:'',prioridad:'',responsable:'',equipo:''};
+  renderGestion();
+}
+
+function filteredOTMs(){
+  return OTMS.filter(o=>{
+    if(gestionFecha && isoDate(o.fecha)!==gestionFecha) return false;
+    if(gestionQuery && !(o.equipo.toLowerCase().includes(gestionQuery) || o.responsable.toLowerCase().includes(gestionQuery) || o.id.toLowerCase().includes(gestionQuery) || o.actividad.toLowerCase().includes(gestionQuery))) return false;
+    if(gestionFiltros.estado && o.estado!==gestionFiltros.estado) return false;
+    if(gestionFiltros.prioridad && o.prioridad!==gestionFiltros.prioridad) return false;
+    if(gestionFiltros.responsable && o.responsable!==gestionFiltros.responsable) return false;
+    return true;
+  });
+}
+
+function paintGestionCards(){
+  const list = filteredOTMs();
+  const countEl = document.getElementById('gestionCount');
+  if(countEl) countEl.textContent = list.length;
+  const wrap = document.getElementById('otmCards');
+  if(!wrap) return;
+  if(list.length===0){
+    wrap.innerHTML = `<div class="bg-white rounded-xl border border-ink-100 shadow-card p-10 text-center text-ink-400 text-sm">No se encontraron OTM con los filtros aplicados.</div>`;
+    return;
+  }
+  wrap.innerHTML = list.map(o=>{
+    const orden = TIPO_ORDEN_SAP[o.tipoMtto] || 'OM0X';
+    const desc = [o.componente!=='—'?o.componente:'', o.sintoma!=='—'?o.sintoma:''].filter(Boolean).join(' — ') || o.actividad;
+    return `
+    <div class="otm-card bg-white rounded-xl border border-ink-100 shadow-card hover:shadow-pop flex">
+      <div class="flex flex-col items-center justify-between py-4 px-2.5 border-r border-ink-100 bg-ink-50/40 rounded-l-xl">
+        <span class="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold tracking-wide text-ink-400 whitespace-nowrap">${o.id}</span>
+        <span class="chip mt-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white ${ORDEN_SAP_COLOR[orden]}">${orden}</span>
+      </div>
+      <div class="flex-1 min-w-0 p-4">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h4 class="font-semibold text-ink-900 text-sm truncate">${o.actividad}${o.esActividadLibre?' <span class=\"text-brand-500 font-normal\">(texto libre)</span>':''}</h4>
+            <p class="text-xs text-ink-400 truncate">${o.equipo}</p>
+          </div>
+          ${badgePrioridad(o.prioridad)}
+        </div>
+        <p class="text-sm text-ink-600 mt-2 line-clamp-2">${desc}</p>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-ink-100 text-xs">
+          ${badgeEstado(o.estado)}
+          <span class="text-ink-500">Responsable: <span class="font-medium text-ink-700">${o.responsable}</span></span>
+          <span class="text-ink-500">Fecha: <span class="font-medium text-ink-700">${fmtDate(o.fecha)}</span></span>
+          ${esConFuga(o) ? `<span class="text-amber-600 font-medium">⚠ Con fuga</span>` : ''}
+          ${o.materiales.length ? `<span class="text-ink-500">${o.materiales.length} material(es)</span>` : ''}
+          ${o.personalAsignado.length ? `<span class="text-ink-500">${o.personalAsignado.length} técnico(s)</span>` : `<span class="text-amber-600">Sin personal asignado</span>`}
+        </div>
+        <div class="flex items-center justify-between mt-3">
+          <button onclick="openAgregarMaterialOTM('${o.id}')" class="px-3 py-1.5 rounded-lg border border-dashed border-ink-300 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-600">+ Agregar material</button>
+          <div class="flex gap-1">
+            <button onclick="openOTM('${o.id}','ver')" title="Ver / ejecutar" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+            <button onclick="openOTM('${o.id}','editar')" title="Editar" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+            </button>
+            <button onclick="openOTM('${o.id}','estado')" title="Cambiar estado" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ---- Modal: Ver (con Ejecución/cierre) / Editar / Cambiar estado ---- */
+function openOTM(id, modo){
+  const o = OTMS.find(x=>x.id===id);
+  if(!o) return;
+  if(modo==='ver') return openVerModal(o);
+  if(modo==='editar') return openEditarModal(o);
+  if(modo==='estado') return openEstadoModal(o);
+}
+
+function stepFlow(o){
+  const orden = ['Pendiente','Programada','En ejecución','Completada'];
+  const cancelada = o.estado==='Cancelada';
+  const enPausa = o.estado==='Esperando material' || o.estado==='Esperando aprobación';
+  const idxActual = enPausa ? 2 : orden.indexOf(o.estado);
+  return `
+  <div class="flex items-center mb-1">
+    ${orden.map((e,i)=>`
+      <div class="flex items-center ${i<orden.length-1?'flex-1':''}">
+        <div class="step-dot ${cancelada ? 'bg-red-400' : i<=idxActual ? 'bg-brand-600':'bg-ink-200'}"></div>
+        ${i<orden.length-1?`<div class="step-line ${cancelada ? 'bg-red-200' : i<idxActual ? 'bg-brand-600':'bg-ink-200'}"></div>`:''}
+      </div>`).join('')}
+  </div>
+  <div class="flex justify-between text-[10px] text-ink-400 mb-3">
+    ${orden.map(e=>`<span class="${e===o.estado?'font-semibold text-ink-700':''}">${e}</span>`).join('')}
+  </div>
+  ${enPausa ? `<p class="text-xs text-amber-600 mb-3">⏸ Actualmente en pausa: <strong>${o.estado}</strong></p>` : ''}
+  ${cancelada ? `<p class="text-xs text-red-600 mb-3">✕ Esta OTM fue cancelada.</p>` : ''}
+  `;
+}
+
+function openVerModal(o){
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-ink-100">
+          <div>
+            <h3 class="font-semibold text-ink-900">Detalle de OTM</h3>
+            <p class="text-xs text-ink-400">${o.id} · ${o.equipo}</p>
+          </div>
+          <button onclick="closeModal()" class="text-ink-400 hover:text-ink-700">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="px-5 pt-4">${stepFlow(o)}</div>
+        <div class="px-5">
+          <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm pb-4 border-b border-ink-100">
+            <div><p class="text-xs text-ink-400">Fecha</p><p class="text-ink-800 font-medium">${fmtDate(o.fecha)}</p></div>
+            <div><p class="text-xs text-ink-400">Estado</p>${badgeEstado(o.estado)}</div>
+            <div><p class="text-xs text-ink-400">Equipo</p><p class="text-ink-800 font-medium">${o.equipo}</p></div>
+            <div><p class="text-xs text-ink-400">DNI SAP</p><p class="text-ink-800 font-medium">${o.dni}</p></div>
+            <div><p class="text-xs text-ink-400">Actividad</p><p class="text-ink-800 font-medium">${o.actividad}</p></div>
+            <div><p class="text-xs text-ink-400">Tipo Mtto / Orden SAP</p><div class="flex gap-1.5">${badgeTipoMtto(o.tipoMtto)}${badgeOrdenSAP(o.tipoMtto)}</div></div>
+            <div><p class="text-xs text-ink-400">Prioridad</p>${badgePrioridad(o.prioridad)}</div>
+            <div><p class="text-xs text-ink-400">Responsable</p><p class="text-ink-800 font-medium">${o.responsable}</p></div>
+            <div><p class="text-xs text-ink-400">Componente afectado</p><p class="text-ink-800 font-medium">${o.componente}</p></div>
+            <div><p class="text-xs text-ink-400">Síntoma / Causa</p><p class="text-ink-800 font-medium">${o.sintoma} / ${o.causa}</p></div>
+          </div>
+          <div class="flex gap-1 border-b border-ink-100 mt-1 overflow-x-auto">
+            <button onclick="switchTab(this,'tab-personal')" class="tab-btn active text-xs font-medium px-3 py-2.5 whitespace-nowrap">Personal asignado</button>
+            <button onclick="switchTab(this,'tab-materiales')" class="tab-btn text-xs font-medium px-3 py-2.5 whitespace-nowrap">Materiales</button>
+            <button onclick="switchTab(this,'tab-ejecucion')" class="tab-btn text-xs font-medium px-3 py-2.5 whitespace-nowrap">Ejecución y cierre</button>
+            <button onclick="switchTab(this,'tab-historial')" class="tab-btn text-xs font-medium px-3 py-2.5 whitespace-nowrap">Historial</button>
+          </div>
+          <div class="py-4">
+            <div id="tab-personal" class="tab-panel">
+              <p class="text-xs text-ink-400 mb-2">Participantes: <span class="font-medium text-ink-700">${o.participantes}</span> (${o.internos} internos / ${o.externos} externos)</p>
+              <p class="text-xs font-medium text-ink-500 mb-1.5">Técnicos internos</p>
+              <div class="flex flex-wrap gap-1.5 mb-2">
+                ${o.personalAsignado.length? o.personalAsignado.map(n=>`<span class="chip px-2.5 py-1 rounded-full text-xs bg-ink-100 text-ink-600">${n} <button onclick="removeTecnicoFromOTM('${o.id}','${n}')" class="text-ink-400 hover:text-red-600">✕</button></span>`).join('') : '<span class="text-xs text-ink-400">Sin técnicos internos asignados.</span>'}
+              </div>
+              <div class="flex gap-2 mb-4">
+                <select id="addTecnicoSel_${o.id}" class="flex-1 border border-ink-200 rounded-lg px-2.5 py-1.5 text-xs">
+                  <option value="">Añadir técnico…</option>
+                  ${TECNICOS.filter(t=>!o.personalAsignado.includes(t)).map(t=>`<option value="${t}">${t}</option>`).join('')}
+                </select>
+                <button onclick="addTecnicoToOTM('${o.id}')" class="px-3 py-1.5 rounded-lg bg-ink-800 hover:bg-ink-900 text-white text-xs font-medium">+ Añadir</button>
+              </div>
+              <div class="pt-3 border-t border-ink-100">
+                <p class="text-xs font-medium text-ink-500 mb-1.5">Personal externo</p>
+                <div class="flex gap-2 items-center">
+                  <input type="number" min="0" id="externosInput_${o.id}" value="${o.externos}" class="w-24 border border-ink-200 rounded-lg px-2.5 py-1.5 text-xs">
+                  <span class="text-xs text-ink-400">persona(s) externas</span>
+                  <button onclick="updateExternos('${o.id}')" class="ml-auto px-3 py-1.5 rounded-lg bg-ink-800 hover:bg-ink-900 text-white text-xs font-medium">Guardar</button>
+                </div>
+              </div>
+            </div>
+            <div id="tab-materiales" class="tab-panel hidden">
+              ${o.materiales.length ? `
+              <table class="w-full text-xs mb-3">
+                <thead><tr class="text-left text-ink-400 border-b border-ink-100"><th class="py-1.5">Material</th><th class="py-1.5">Descripción</th><th class="py-1.5 text-right">Cantidad</th><th></th></tr></thead>
+                <tbody>
+                ${o.materiales.map((m,i)=>`<tr class="border-b border-ink-50"><td class="py-1.5 font-medium text-ink-700">${m.codigo}</td><td class="py-1.5 text-ink-600">${m.desc}</td><td class="py-1.5 text-right text-ink-700">${m.cantidad} ${m.unidad}</td><td class="py-1.5 text-right"><button onclick="removeMaterialFromOTM('${o.id}',${i})" class="text-ink-400 hover:text-red-600">✕</button></td></tr>`).join('')}
+                </tbody>
+              </table>` : `<p class="text-xs text-ink-400 mb-3">No se han asociado materiales a esta OTM.</p>`}
+              <button onclick="closeModal(); openAgregarMaterialOTM('${o.id}')" class="px-3 py-1.5 rounded-lg border border-dashed border-ink-300 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-600">+ Agregar material</button>
+            </div>
+            <div id="tab-ejecucion" class="tab-panel hidden">
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs font-medium text-ink-500 mb-1">Número de jornales</label>
+                  <input type="number" min="0" id="ejec_jornales_${o.id}" value="${o.jornalesEjecutados ?? o.participantes ?? 0}" oninput="recalcEjecucion('${o.id}')" class="w-full border border-ink-200 rounded-lg px-2.5 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-ink-500 mb-1">Horas ejecutadas</label>
+                  <input type="number" min="0" step="0.5" id="ejec_horas_${o.id}" value="${o.horasEjecutadas ?? ''}" oninput="recalcEjecucion('${o.id}')" class="w-full border border-ink-200 rounded-lg px-2.5 py-1.5 text-sm">
+                </div>
+              </div>
+              <div class="bg-violet-50 rounded-lg p-3 text-center mb-3">
+                <p class="text-[11px] text-violet-600 font-medium uppercase tracking-wide">Horas Hombre (jornales × horas)</p>
+                <p id="ejec_hh_${o.id}" class="text-xl font-bold text-violet-700 mt-0.5">${(o.hh||0).toFixed ? o.hh.toFixed(1) : o.hh}</p>
+              </div>
+              <label class="block text-xs font-medium text-ink-500 mb-1">Comentario final de cierre</label>
+              <textarea id="ejec_comentario_${o.id}" rows="3" placeholder="Resumen de lo ejecutado, observaciones y conformidad" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm mb-3">${o.comentarioCierre||''}</textarea>
+              <button onclick="guardarEjecucion('${o.id}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Guardar ejecución</button>
+            </div>
+            <div id="tab-historial" class="tab-panel hidden">
+              <div class="space-y-2">
+                ${o.historial.map(h=>`
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+                    <span class="text-ink-400 whitespace-nowrap">${h.fecha.toLocaleString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                    <span class="text-ink-700 font-medium">→ ${h.estado}</span>
+                  </div>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function switchTab(btn, tabId){
+  const modal = btn.closest('.modal-panel');
+  modal.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  modal.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
+  modal.querySelector('#'+tabId).classList.remove('hidden');
+}
+
+function addTecnicoToOTM(id){
+  const sel = document.getElementById('addTecnicoSel_'+id);
+  if(!sel.value) return;
+  const o = OTMS.find(x=>x.id===id);
+  o.personalAsignado.push(sel.value);
+  o.internos = o.personalAsignado.length;
+  o.participantes = o.internos + o.externos;
+  syncOTM(o);
+  toast(`${sel.value} agregado a la OTM`);
+  openVerModal(o);
+}
+function removeTecnicoFromOTM(id, nombre){
+  const o = OTMS.find(x=>x.id===id);
+  o.personalAsignado = o.personalAsignado.filter(n=>n!==nombre);
+  o.internos = o.personalAsignado.length;
+  o.participantes = o.internos + o.externos;
+  syncOTM(o);
+  openVerModal(o);
+}
+function updateExternos(id){
+  const o = OTMS.find(x=>x.id===id);
+  const val = Math.max(0, parseInt(document.getElementById('externosInput_'+id).value)||0);
+  o.externos = val;
+  o.participantes = o.internos + o.externos;
+  syncOTM(o);
+  toast(`Personal externo actualizado a ${val}`);
+  openVerModal(o);
+}
+function removeMaterialFromOTM(id, idx){
+  const o = OTMS.find(x=>x.id===id);
+  o.materiales.splice(idx,1);
+  syncOTM(o);
+  openVerModal(o);
+}
+function recalcEjecucion(id){
+  const j = parseFloat(document.getElementById('ejec_jornales_'+id).value)||0;
+  const h = parseFloat(document.getElementById('ejec_horas_'+id).value)||0;
+  document.getElementById('ejec_hh_'+id).textContent = (j*h).toFixed(1);
+}
+function guardarEjecucion(id){
+  const o = OTMS.find(x=>x.id===id);
+  const j = parseFloat(document.getElementById('ejec_jornales_'+id).value)||0;
+  const h = parseFloat(document.getElementById('ejec_horas_'+id).value)||0;
+  o.jornalesEjecutados = j;
+  o.horasEjecutadas = h;
+  o.hh = +(j*h).toFixed(1);
+  o.comentarioCierre = document.getElementById('ejec_comentario_'+id).value;
+  syncOTM(o);
+  closeModal();
+  paintGestionCards();
+  toast(`Ejecución de ${id} guardada (${o.hh} HH)`);
+}
+
+function openEditarModal(o){
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-ink-100">
+          <div>
+            <h3 class="font-semibold text-ink-900">Editar OTM</h3>
+            <p class="text-xs text-ink-400">${o.id} · ${o.equipo}</p>
+          </div>
+          <button onclick="closeModal()" class="text-ink-400 hover:text-ink-700">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="px-5 py-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-ink-500 mb-1">Prioridad</label>
+              <select id="edit_prioridad" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+                ${PRIORIDADES.map(p=>`<option value="${p}" ${p===o.prioridad?'selected':''}>${p}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-ink-500 mb-1">Responsable</label>
+              <select id="edit_responsable" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+                ${RESPONSABLES.map(r=>`<option value="${r}" ${r===o.responsable?'selected':''}>${r}</option>`).join('')}
+              </select>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-ink-500 mb-1">Componente afectado</label>
+              <input id="edit_componente" type="text" value="${o.componente}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-ink-500 mb-1">Síntoma de avería</label>
+              <input id="edit_sintoma" type="text" value="${o.sintoma}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-ink-500 mb-1">Causa de avería</label>
+              <input id="edit_causa" type="text" value="${o.causa}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-ink-500 mb-1">Medida a tomar</label>
+              <input id="edit_medida" type="text" value="${o.medida}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-ink-500 mb-1">Actividad realizada</label>
+              <textarea id="edit_actrealizada" rows="2" placeholder="Complete al finalizar la ejecución" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">${o.actividadRealizada}</textarea>
+            </div>
+          </div>
+          <p class="text-[11px] text-ink-400 mt-3">Los jornales, horas ejecutadas y el comentario de cierre se registran desde "Ejecución y cierre" en Ver. El cambio de estado se realiza desde "Cambiar estado".</p>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+          <button onclick="saveEdicion('${o.id}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function saveEdicion(id){
+  const o = OTMS.find(x=>x.id===id);
+  o.prioridad = document.getElementById('edit_prioridad').value;
+  o.responsable = document.getElementById('edit_responsable').value;
+  o.componente = document.getElementById('edit_componente').value;
+  o.sintoma = document.getElementById('edit_sintoma').value;
+  o.causa = document.getElementById('edit_causa').value;
+  o.medida = document.getElementById('edit_medida').value;
+  o.actividadRealizada = document.getElementById('edit_actrealizada').value;
+  syncOTM(o);
+  closeModal();
+  paintGestionCards();
+  toast(`OTM ${id} actualizada`);
+}
+
+function openEstadoModal(o){
+  const next = ESTADO_TRANSICIONES[o.estado];
+  if(next.length===0){
+    document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-md">
+        <div class="px-5 py-4 border-b border-ink-100">
+          <h3 class="font-semibold text-ink-900">Cambiar estado</h3>
+          <p class="text-xs text-ink-400">${o.id}</p>
+        </div>
+        <div class="px-5 py-5">
+          ${badgeEstado(o.estado)}
+          <p class="text-sm text-ink-600 mt-3">Esta OTM se encuentra en un estado final y no admite más transiciones.</p>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cerrar</button>
+        </div>
+      </div>
+    </div>`;
+    return;
+  }
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-md">
+        <div class="px-5 py-4 border-b border-ink-100">
+          <h3 class="font-semibold text-ink-900">Cambiar estado</h3>
+          <p class="text-xs text-ink-400">${o.id} · ${o.equipo}</p>
+        </div>
+        <div class="px-5 py-5">
+          <p class="text-xs text-ink-400 mb-1">Estado actual</p>
+          <div class="mb-4">${badgeEstado(o.estado)}</div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Nuevo estado</label>
+          <select id="nuevoEstado" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            ${next.map(e=>`<option value="${e}">${e}</option>`).join('')}
+          </select>
+          <p class="text-[11px] text-ink-400 mt-2">Solo se muestran las transiciones válidas según el flujo de la OTM.</p>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+          <button onclick="confirmarCambioEstado('${o.id}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function confirmarCambioEstado(id){
+  const o = OTMS.find(x=>x.id===id);
+  const nuevo = document.getElementById('nuevoEstado').value;
+  o.estado = nuevo;
+  o.historial.push({estado:nuevo, fecha:new Date()});
+  if(nuevo==='Completada' && !o.actividadRealizada){
+    o.actividadRealizada = 'Trabajo ejecutado conforme a lo programado. Verificación funcional satisfactoria.';
+  }
+  syncOTM(o);
+  closeModal();
+  paintGestionCards();
+  toast(`OTM ${id} cambió a estado "${nuevo}"`);
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+/* ---- Agregar material directo a una OTM (desde tarjeta) ---- */
+function openAgregarMaterialOTM(otmId){
+  const o = OTMS.find(x=>x.id===otmId);
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-md">
+        <div class="px-5 py-4 border-b border-ink-100">
+          <h3 class="font-semibold text-ink-900">Agregar material</h3>
+          <p class="text-xs text-ink-400">${o.id} · ${o.equipo}</p>
+        </div>
+        <div class="px-5 py-5 space-y-3">
+          <div class="relative">
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Material</label>
+            <input type="text" id="ac_input_qmaterial" autocomplete="off" placeholder="Buscar material por código o nombre…" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <div id="ac_list_qmaterial" class="ac-list hidden"></div>
+            <input type="hidden" id="qmat_codigo">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad</label>
+            <input type="number" id="qmat_cant" min="1" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <p id="qmat_stockinfo" class="text-[11px] text-ink-400 mt-1"></p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+          <button onclick="confirmarAgregarMaterialOTM('${otmId}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  wireAutocomplete({
+    inputId:'ac_input_qmaterial', listId:'ac_list_qmaterial',
+    itemsProvider: ()=> MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad})`})),
+    onPick: (codigo)=>{
+      document.getElementById('qmat_codigo').value = codigo;
+      const m = MATERIALES.find(x=>x.codigo===codigo);
+      document.getElementById('qmat_stockinfo').innerHTML = `Stock disponible: ${m.stock} ${m.unidad}${m.stock<m.min?' · <span class="text-amber-600 font-medium">stock bajo</span>':''}`;
+    },
+    emptyText:'No se encontró el material'
+  });
+}
+function confirmarAgregarMaterialOTM(otmId){
+  const codigo = document.getElementById('qmat_codigo').value;
+  const cant = parseInt(document.getElementById('qmat_cant').value)||1;
+  if(!codigo){ toast('Selecciona un material de la lista', 'error'); return; }
+  const m = MATERIALES.find(x=>x.codigo===codigo);
+  const o = OTMS.find(x=>x.id===otmId);
+  o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  syncOTM(o);
+  if(cant > m.stock){
+    toast(`Se registró la necesidad de ${cant} ${m.unidad}. Stock disponible: ${m.stock} — considera pasar la OTM a "Esperando material".`, 'error');
+  } else {
+    toast(`${m.codigo} agregado a ${otmId} (${cant} ${m.unidad})`);
+  }
+  closeModal();
+  paintGestionCards();
+}
+
+/* =========================================================
+   MATERIALES (catálogo)
+   ========================================================= */
+function renderMateriales(){
+  document.getElementById('view-materiales').innerHTML = `
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 mb-4">
+    ${kpiCard('Total materiales', MATERIALES.length, 'ítems en catálogo', 'brand', iconClip())}
+    ${kpiCard('Stock bajo', MATERIALES.filter(m=>m.stock>0 && m.stock<m.min).length, 'requieren reposición', 'amber', iconClock())}
+    ${kpiCard('Sin stock', MATERIALES.filter(m=>m.stock===0).length, 'ítems agotados', 'ink', iconPause())}
+  </div>
+
+  <div class="bg-white rounded-xl shadow-card border border-ink-100 overflow-hidden">
+    <div class="px-4 lg:px-5 py-3 border-b border-ink-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+      <div class="relative w-full sm:w-80">
+        <svg class="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/></svg>
+        <input id="matSearch" oninput="filterMateriales()" type="text" placeholder="Buscar por código o descripción…" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
+      </div>
+      <p class="text-xs text-ink-400"><span id="matCount" class="font-medium text-ink-700">${MATERIALES.length}</span> materiales</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-ink-400 text-xs bg-ink-50/60">
+            <th class="py-2.5 px-4 font-medium">Material</th>
+            <th class="py-2.5 px-4 font-medium">Descripción</th>
+            <th class="py-2.5 px-4 font-medium">Unidad</th>
+            <th class="py-2.5 px-4 font-medium">Stock</th>
+            <th class="py-2.5 px-4 font-medium">Estado</th>
+            <th class="py-2.5 px-4 font-medium text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="matBody"></tbody>
+      </table>
+    </div>
+  </div>
+  `;
+  paintMateriales(MATERIALES);
+}
+function paintMateriales(list){
+  const body = document.getElementById('matBody');
+  document.getElementById('matCount').textContent = list.length;
+  if(list.length===0){
+    body.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-ink-400 text-sm">No se encontraron materiales.</td></tr>`;
+    return;
+  }
+  body.innerHTML = list.map(m=>{
+    let estado, cls;
+    if(m.stock===0){ estado='Agotado'; cls='bg-red-50 text-red-700 ring-1 ring-red-200'; }
+    else if(m.stock<m.min){ estado='Stock bajo'; cls='bg-amber-50 text-amber-700 ring-1 ring-amber-200'; }
+    else { estado='Disponible'; cls='bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'; }
+    return `
+    <tr class="border-b border-ink-50 hover:bg-ink-50/60">
+      <td class="py-2.5 px-4 font-medium text-ink-800 whitespace-nowrap">${m.codigo}</td>
+      <td class="py-2.5 px-4 text-ink-600">${m.desc}</td>
+      <td class="py-2.5 px-4 text-ink-500">${m.unidad}</td>
+      <td class="py-2.5 px-4 text-ink-800 font-medium">${m.stock}</td>
+      <td class="py-2.5 px-4"><span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${cls}">${estado}</span></td>
+      <td class="py-2.5 px-4 text-right">
+        <button onclick="openAsociarMaterial('${m.codigo}')" class="text-xs font-medium text-brand-600 hover:text-brand-700">+ Asociar a OTM</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function filterMateriales(){
+  const q = document.getElementById('matSearch').value.toLowerCase().trim();
+  const list = MATERIALES.filter(m => m.desc.toLowerCase().includes(q) || m.codigo.toLowerCase().includes(q));
+  paintMateriales(list);
+}
+function openAsociarMaterial(codigo){
+  const m = MATERIALES.find(x=>x.codigo===codigo);
+  const abiertas = OTMS.filter(o=>!ESTADOS_TERMINALES.includes(o.estado));
+  if(abiertas.length===0){ toast('No hay OTM abiertas para asociar materiales', 'error'); return; }
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-md">
+        <div class="px-5 py-4 border-b border-ink-100">
+          <h3 class="font-semibold text-ink-900">Asociar material a OTM</h3>
+          <p class="text-xs text-ink-400">${m.codigo} · ${m.desc}</p>
+        </div>
+        <div class="px-5 py-5 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">OTM destino</label>
+            <select id="asoc_otm" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              ${abiertas.map(o=>`<option value="${o.id}">${o.id} · ${o.equipo}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad</label>
+            <input type="number" id="asoc_cant" min="1" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <p class="text-[11px] text-ink-400 mt-1">Stock disponible: ${m.stock} ${m.unidad}${m.stock < m.min ? ' · <span class="text-amber-600 font-medium">stock bajo</span>':''}</p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+          <button onclick="confirmarAsociarMaterial('${codigo}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar a la OTM</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function confirmarAsociarMaterial(codigo){
+  const m = MATERIALES.find(x=>x.codigo===codigo);
+  const otmId = document.getElementById('asoc_otm').value;
+  const cant = parseInt(document.getElementById('asoc_cant').value)||1;
+  const o = OTMS.find(x=>x.id===otmId);
+  o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  syncOTM(o);
+  if(cant > m.stock){
+    toast(`Se registró la necesidad de ${cant} ${m.unidad}. Stock disponible: ${m.stock} — se recomienda pasar la OTM a "Esperando material".`, 'error');
+  } else {
+    toast(`${m.codigo} agregado a ${otmId} (${cant} ${m.unidad})`);
+  }
+  closeModal();
+}
+
+/* Init */
+initApp();
+</script>
+</body>
+</html>
