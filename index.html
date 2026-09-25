@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#111826">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>OTM · Gestión de Órdenes de Trabajo de Mantenimiento</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -128,6 +130,7 @@
     </div>
     <div class="p-3 border-t border-white/10">
       <p id="syncStatus" class="px-3 text-[11px] text-ink-400"></p>
+      <p id="appVersion" class="px-3 text-[10px] text-ink-500 mt-1"></p>
     </div>
   </aside>
   <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/40 z-20 lg:hidden"></div>
@@ -157,8 +160,8 @@
 
     <main class="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto">
       <div id="view-dashboard" class="hidden"></div>
-      <div id="view-crear" class="hidden"></div>
-      <div id="view-gestion"></div>
+      <div id="view-crear"></div>
+      <div id="view-gestion" class="hidden"></div>
       <div id="view-materiales" class="hidden"></div>
     </main>
   </div>
@@ -183,6 +186,7 @@
 /* =========================================================
    CONEXIÓN A GOOGLE SHEETS (Apps Script Web App)
    ========================================================= */
+const APP_VERSION = '2.4';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
 const CONFIG = {
   // Pegar acá la URL que entrega Apps Script al publicar ("Implementar > Nueva implementación > Aplicación web")
   API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
@@ -234,7 +238,7 @@ async function apiPost(action, payload, intentos=2){
       const res = await fetchTimeout(CONFIG.API_URL, {
         method:'POST', cache:'no-store',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify({action, payload})
+        body: JSON.stringify({action, payload, v: APP_VERSION})
       }, 90000);   // escrituras: hasta 90 s (Apps Script puede tardar en "despertar")
       if(!res.ok) throw new Error('Error del servidor ('+res.status+')');
       const data = await res.json();
@@ -243,11 +247,18 @@ async function apiPost(action, payload, intentos=2){
     }catch(err){
       ultimoError = err.name==='AbortError' ? new Error('Tiempo de espera agotado') : err;
       // si el servidor respondió con un error de negocio, no se reintenta
+      if(/versión antigua/i.test(ultimoError.message)) mostrarAvisoVersion();
       if(err.message && !/servidor|Failed to fetch|Tiempo|NetworkError|Load failed/i.test(ultimoError.message)) break;
       if(i < intentos-1) await sleep(1000);
     }
   }
   throw ultimoError;
+}
+function mostrarAvisoVersion(){
+  if(document.getElementById('avisoVersion')) return;
+  document.body.insertAdjacentHTML('afterbegin', `<div id="avisoVersion" class="fixed top-0 inset-x-0 z-[60] bg-amber-500 text-white text-sm font-medium px-4 py-2.5 flex items-center justify-center gap-3">
+    Hay una versión nueva de la app.
+    <button onclick="location.reload()" class="px-3 py-1 rounded-md bg-white text-amber-700 text-xs font-semibold">Actualizar ahora</button></div>`);
 }
 let pendientesSync = 0;
 function paintSyncStatus(){
@@ -271,65 +282,10 @@ window.addEventListener('beforeunload', e=>{ if(pendientesSync>0){ e.preventDefa
    DATOS MAESTROS (se cargan desde el Google Sheet al iniciar;
    estos arrays quedan vacíos hasta que loadDataFromSheet() los llena)
    ========================================================= */
-let EQUIPOS = [
-  {dni:8000092, nombre:'RED DE TUBERIA DE ADUCCIÓN B6A', categoria:'RED DE_TUBERIA'},
-  {dni:8000093, nombre:'RED DE TUBERIA DE ADUCCIÓN B6B', categoria:'RED DE_TUBERIA'},
-  {dni:8000090, nombre:'TOMA DE CAPTACIÓN B6A', categoria:'TOM_CAPTACION'},
-  {dni:8000091, nombre:'TOMA DE CAPTACIÓN B6B', categoria:'TOM_CAPTACION'},
-  {dni:8000099, nombre:'RESERVORIO 1', categoria:'RESERVORIO'},
-  {dni:8000100, nombre:'RESERVORIO 2', categoria:'RESERVORIO'},
-  {dni:8000095, nombre:'FLOCULADOR 1', categoria:'FLOCULADOR'},
-  {dni:8000096, nombre:'FLOCULADOR 2', categoria:'FLOCULADOR'},
-  {dni:8000097, nombre:'SEDIMENTADOR 1', categoria:'SEDIMENTADOR'},
-  {dni:8000098, nombre:'SEDIMENTADOR 2', categoria:'SEDIMENTADOR'},
-  {dni:8000234, nombre:'AUTOMATIZACIÓN DE CAMPO O1E1', categoria:'AUTOMATIZACIÓN_CAMPO'},
-  {dni:8000235, nombre:'AUTOMATIZACIÓN DE CAMPO O1E2', categoria:'AUTOMATIZACIÓN_CAMPO'},
-  {dni:8000111, nombre:'BATERIA DE FILTROS DE ANILLOS O1E1', categoria:'BATERIA_FILTROS_ANILLOS'},
-  {dni:8000221, nombre:'BATERIA DE FILTRADO DE ASPERSIÓN', categoria:'BATERIA_FILTRADO'},
-];
+let EQUIPOS = [];   // se llenan desde el Sheet (antes había datos de ejemplo aquí)
 
 // Actividad -> DNI -> Tipo_Mtto (MP=Preventivo, MC=Correctivo, MMJ=Mejora)
-let ACTIVIDADES = {
-  8000092:[{a:'CAMB. VALVULA VOLANTE HIDRANTE B6A', tipo:'MC'}],
-  8000090:[{a:'CAMB. VALVULA VOLANTE CONEX. HIDRANTE', tipo:'MC'}],
-  8000091:[{a:'REV. VALVULA HIDRANTE B6B', tipo:'MP'}],
-  8000093:[{a:'REV. RED ADUCCIÓN B6B', tipo:'MP'}],
-  8000099:[
-    {a:'MTTO.GENERAL (EXTRACCIÓN DE LODOS) R1', tipo:'MP'},
-    {a:'LIMP. DE TALUDES R1', tipo:'MP'},
-    {a:'LIMP. DE TOMA FLOTANTE R1', tipo:'MP'},
-    {a:'REP. TUBERIA RESERVORIO 1', tipo:'MC'},
-    {a:'REP. ARCO DE VALVULA R1', tipo:'MC'},
-    {a:'REP.GEOMEMBRANA TALUD R1', tipo:'MC'},
-  ],
-  8000100:[
-    {a:'MTTO.GENERAL (EXTRACCIÓN DE LODOS) R2', tipo:'MP'},
-    {a:'LIMP. DE TALUDES R2', tipo:'MP'},
-    {a:'REP. TUBERIA RESERVORIO 2', tipo:'MC'},
-    {a:'REP. DE FLOTADOR R2', tipo:'MC'},
-    {a:'DESARM. ESCALERA RESERVORIO 2', tipo:'MC'},
-  ],
-  8000095:[
-    {a:'LAV. DE FLOCULADOR 1', tipo:'MP'},
-    {a:'REP. FLOCULADOR 1', tipo:'MC'},
-    {a:'REP. LLAVE DESCARGA FLOCULADOR 1', tipo:'MC'},
-  ],
-  8000096:[
-    {a:'LAV. DE FLOCULADOR 2', tipo:'MP'},
-    {a:'REP. FLOCULADOR 2', tipo:'MC'},
-  ],
-  8000097:[{a:'REP. FLAUTA DESCARGA SULFATO COBRE SED. 1', tipo:'MC'}],
-  8000098:[{a:'REP. FLAUTA DESCARGA SULFATO COBRE SED. 2', tipo:'MC'}],
-  8000234:[{a:'MTTO. COMPONENTES ELECTRICOS O1E1', tipo:'MP'}],
-  8000235:[{a:'MTTO. COMPONENTES ELECTRICOS O1E2', tipo:'MP'}],
-  8000111:[
-    {a:'MTTO. GE.FILTROS DE ANILLOS O1E1', tipo:'MP'},
-    {a:'REP. FUGA FILTRO ANILLO O1E1', tipo:'MC'},
-    {a:'REP. SK SPINE FILTRO ANILLO O1E1', tipo:'MC'},
-    {a:'MTTO. EMERG.FILTROS DE ANILLOS O1E1', tipo:'MC'},
-  ],
-  8000221:[{a:'INST. PUNTO DE AGUA BAT. ASPERSIÓN', tipo:'MMJ'}],
-};
+let ACTIVIDADES = {};
 const TIPO_MTTO_LABEL = {MP:'Preventivo', MC:'Correctivo', MMJ:'Mejora'};
 // Tipo de orden SAP asociado (según hoja ACTIVIDADES: columna "Tipo")
 const TIPO_ORDEN_SAP = {MP:'OM03', MC:'OM01', MMJ:'OM04'};
@@ -378,14 +334,10 @@ function fmtDate(d){
 function fmtDateTime(d){
   return d.toLocaleString('es-PE',{timeZone:TZ, day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
-/* Las OTM antiguas se guardaron a las 00:00 UTC (= día anterior en Perú). Se corrigen al leer. */
+/* La fecha se muestra tal como está en el Sheet (el servidor pone la hora real al crear). */
 function normalizarFechaOTM(iso){
   const d = new Date(iso);
-  if(isNaN(d)) return new Date();
-  if(d.getUTCHours()===0 && d.getUTCMinutes()===0 && d.getUTCSeconds()===0 && d.getUTCMilliseconds()===0){
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 17, 0, 0));
-  }
-  return d;
+  return isNaN(d) ? new Date() : d;
 }
 /* Semanas (lunes a domingo) calculadas sobre la fecha Lima */
 function addDaysISO(iso, n){ const d = new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
@@ -524,22 +476,28 @@ function actualizarStockEnModal(){
   if(q && q.value && el){ const m = MATERIALES.find(x=>x.codigo===q.value); if(m) el.innerHTML = txt(m); }
 }
 
+function compararVersion(a, b){
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  for(let i=0;i<Math.max(pa.length,pb.length);i++){ const x=pa[i]||0, y=pb[i]||0; if(x!==y) return x<y?-1:1; }
+  return 0;
+}
 async function initApp(){
-  const root = document.getElementById('view-gestion');
+  const root = document.getElementById('view-crear');
+  const vEl = document.getElementById('appVersion'); if(vEl) vEl.textContent = 'v'+APP_VERSION;
   // 1) Pintar al instante con la última copia guardada en este navegador
   const cacheCore = lsGet('otm_cache_core');
   const cacheMat = lsGet('otm_cache_mat');
   if(cacheMat) aplicarMateriales(cacheMat);
   if(cacheCore){
     aplicarCore(cacheCore);
-    renderGestion();
+    CORE_CARGADO = false;   // hasta confirmar con el Sheet
     document.getElementById('syncStatus').textContent = 'Actualizando datos…';
-  } else {
-    root.innerHTML = `<div class="flex items-center justify-center py-24 text-ink-400 text-sm">Cargando datos desde Google Sheets…</div>`;
   }
+  navigate('crear');       // la app abre directamente en "Reportar OTM"
   // 2) Datos principales (rápido) y luego materiales (pesado) en segundo plano
   try{
     const core = await apiGet('core');
+    if(core.minAppVersion && compararVersion(APP_VERSION, core.minAppVersion) < 0) mostrarAvisoVersion();
     aplicarCore(core);
     lsSet('otm_cache_core', core);
     paintSyncStatus();
@@ -1128,7 +1086,7 @@ function paintChipsCrear(){
 function wireCrearAutocompletes(){
   wireAutocomplete({
     inputId:'ac_input_equipo', listId:'ac_list_equipo',
-    itemsProvider: ()=> EQUIPOS.map(e=>({value:String(e.dni), label:e.nombre})),
+    itemsProvider: ()=> EQUIPOS.length ? EQUIPOS.map(e=>({value:String(e.dni), label:e.nombre})) : (CORE_CARGADO ? [] : null),
     onPick: (dni)=>{
       crearState.equipoDni = dni;
       document.getElementById('f_dni').value = dni;
@@ -1312,7 +1270,8 @@ async function guardarNuevaOTM(nueva){
     if(!ACTIVIDADES[k]) ACTIVIDADES[k] = [];
     if(!ACTIVIDADES[k].some(a=>norm(a.a)===norm(nueva.actividad))) ACTIVIDADES[k].push({a:nueva.actividad, tipo:nueva.tipoMtto});
   }
-  await apiPost('upsert_otm', {otm:nueva});
+  const r = await apiPost('upsert_otm', {otm:nueva});
+  if(r && r.fecha) nueva.fecha = new Date(r.fecha);   // fecha y hora reales asignadas por el servidor
   OTMS.unshift(nueva);
 }
 
