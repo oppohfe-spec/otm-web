@@ -1349,6 +1349,102 @@ function mensajeWhatsAppOTM(o){
   }
   return lineas.join('\n');
 }
+function abrirWhatsApp(texto){
+  window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+}
+function cabeceraOTM(o){
+  return [
+    `📋 *OTM:* ${o.id}`,
+    `⚙️ *Equipo:* ${o.equipo}`,
+    `🧰 *Actividad:* ${o.actividad}`,
+    `👷 *Responsable:* ${o.responsable}`,
+  ];
+}
+/* Reenvío completo de una OTM, con su estado y datos actuales */
+function mensajeReenvioOTM(o){
+  const l = [`🔁 *OTM (reenvío)*`, ...cabeceraOTM(o)];
+  l.splice(3, 0, `🔢 *DNI:* ${o.dni}`);
+  l.push(
+    `🏷️ *Tipo:* ${TIPO_MTTO_LABEL[o.tipoMtto]||''} (${TIPO_ORDEN_SAP[o.tipoMtto]||''})`,
+    `🚦 *Prioridad:* ${o.prioridad}`,
+    `📌 *Estado:* ${o.estado}`,
+    `📅 *Fecha:* ${fmtDateTime(o.fecha)}`,
+  );
+  const diag = [o.componente, o.sintoma].filter(x=>x && x!=='—').join(' — ');
+  if(diag) l.push(`🔍 *Diagnóstico:* ${diag}`);
+  if(o.causa && o.causa!=='—') l.push(`❓ *Causa:* ${o.causa}`);
+  if(o.medida && o.medida!=='—') l.push(`✅ *Medida:* ${o.medida}`);
+  if(o.personalAsignado.length || o.externos){
+    l.push(`👥 *Personal:* ${o.personalAsignado.join(', ') || '—'}${o.externos?` + ${o.externos} externo(s)`:''}`);
+  }
+  if(o.materiales.length){
+    l.push(`📦 *Materiales:*`);
+    o.materiales.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`));
+  }
+  return l.join('\n');
+}
+function reenviarWhatsApp(id){
+  const o = OTMS.find(x=>x.id===id);
+  if(o) abrirWhatsApp(mensajeReenvioOTM(o));
+}
+
+/* ---- Materiales recién añadidos, pendientes de enviar por WhatsApp (por OTM) ----
+   Solo se envían los que se agregaron desde el último envío. Se guardan en este
+   navegador para no perderlos si se recarga la página. */
+let MAT_NUEVOS = lsGet('otm_mat_nuevos') || {};   // { idOTM: [{codigo, desc, unidad, cantidad}] }
+function guardarMatNuevos(){ lsSet('otm_mat_nuevos', MAT_NUEVOS); }
+function registrarMatNuevo(otmId, m, cant){
+  const lista = MAT_NUEVOS[otmId] = MAT_NUEVOS[otmId] || [];
+  const ya = lista.find(x=>x.codigo===m.codigo);
+  if(ya) ya.cantidad = +(ya.cantidad + cant).toFixed(3);
+  else lista.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  guardarMatNuevos();
+}
+function mensajeMaterialesNuevos(o, lista){
+  const l = [`📦 *Materiales añadidos a OTM*`, ...cabeceraOTM(o), `📅 *Fecha:* ${fmtDateTime(new Date())}`, `🧾 *Materiales añadidos:*`];
+  lista.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`));
+  return l.join('\n');
+}
+function enviarMatNuevosWhatsApp(otmId){
+  const o = OTMS.find(x=>x.id===otmId);
+  const lista = MAT_NUEVOS[otmId] || [];
+  if(!o || !lista.length){ toast('No hay materiales nuevos por enviar en esta OTM', 'info'); return; }
+  abrirWhatsApp(mensajeMaterialesNuevos(o, lista));
+  delete MAT_NUEVOS[otmId];
+  guardarMatNuevos();
+  paintMatPendientes();
+}
+function descartarMatNuevos(otmId){
+  delete MAT_NUEVOS[otmId]; guardarMatNuevos(); paintMatPendientes();
+}
+/* Aviso en la pestaña Materiales con los materiales añadidos aún no enviados */
+function paintMatPendientes(){
+  const el = document.getElementById('matPendientes');
+  if(!el) return;
+  // limpia OTM que ya no existen
+  Object.keys(MAT_NUEVOS).forEach(id=>{ if(!OTMS.some(o=>o.id===id) || !MAT_NUEVOS[id].length) delete MAT_NUEVOS[id]; });
+  const ids = Object.keys(MAT_NUEVOS);
+  el.innerHTML = ids.length ? `
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
+      <p class="text-sm font-semibold text-emerald-800 mb-2">Materiales añadidos sin enviar por WhatsApp</p>
+      <div class="space-y-2">
+        ${ids.map(id=>{
+          const o = OTMS.find(x=>x.id===id); const lista = MAT_NUEVOS[id];
+          return `<div class="flex flex-col sm:flex-row sm:items-center gap-2 bg-white rounded-lg border border-emerald-100 px-3 py-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold text-ink-800 truncate">${id} · ${esc(o.equipo)}</p>
+              <p class="text-[11px] text-ink-500 truncate">${lista.map(m=>`${esc(m.desc)} (${m.cantidad} ${esc(m.unidad)})`).join(' · ')}</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <button onclick="descartarMatNuevos('${id}')" class="px-3 py-2 rounded-lg border border-ink-200 text-xs font-medium text-ink-500 hover:bg-ink-50">Descartar</button>
+              <button onclick="enviarMatNuevosWhatsApp('${id}')" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium">${iconWhatsapp()} Enviar ${lista.length} material(es)</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+}
+
 function registrarYCompartirWhatsApp(){
   if(guardandoOTM) return;
   const nueva = construirOTMDesdeFormulario();
@@ -1502,8 +1598,9 @@ function paintGestionCards(){
           ${o.personalAsignado.length ? `<span class="text-ink-500">${o.personalAsignado.length} técnico(s)</span>` : `<span class="text-amber-600">Sin personal asignado</span>`}
         </div>
         <div class="flex items-center justify-between mt-3">
-          <button onclick="openAgregarMaterialOTM('${o.id}')" class="px-3 py-1.5 rounded-lg border border-dashed border-ink-300 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-600">+ Agregar material</button>
+          <button onclick="openAgregarMaterialOTM('${o.id}')" class="px-3 py-1.5 rounded-lg border border-dashed border-ink-300 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-600 whitespace-nowrap">+ <span class="hidden sm:inline">Agregar </span>material</button>
           <div class="flex gap-1">
+            <button onclick="reenviarWhatsApp('${o.id}')" title="Reenviar por WhatsApp" class="act-btn p-1.5 rounded-md hover:bg-emerald-50 text-emerald-600">${iconWhatsapp()}</button>
             <button onclick="openOTM('${o.id}','ver')" title="Ver / ejecutar" class="act-btn p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </button>
@@ -1695,7 +1792,12 @@ function updateExternos(id){
 }
 function removeMaterialFromOTM(id, idx){
   const o = OTMS.find(x=>x.id===id);
-  o.materiales.splice(idx,1);
+  const [quitado] = o.materiales.splice(idx,1);
+  if(quitado && MAT_NUEVOS[id]){   // si estaba pendiente de enviar, se quita también
+    MAT_NUEVOS[id] = MAT_NUEVOS[id].filter(x=>x.codigo!==String(quitado.codigo));
+    if(!MAT_NUEVOS[id].length) delete MAT_NUEVOS[id];
+    guardarMatNuevos();
+  }
   syncOTM(o);
   openVerModal(o);
 }
@@ -1929,6 +2031,7 @@ function openAgregarMaterialOTM(otmId){
         </div>
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
           <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+          <button onclick="confirmarAgregarMaterialOTM('${otmId}', true)" title="Agregar y enviar por WhatsApp solo los materiales recién añadidos" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">${iconWhatsapp()}<span class="hidden sm:inline">Agregar y enviar</span><span class="sm:hidden">Enviar</span></button>
           <button onclick="confirmarAgregarMaterialOTM('${otmId}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar</button>
         </div>
       </div>
@@ -1947,7 +2050,7 @@ function openAgregarMaterialOTM(otmId){
   });
   cargarMaterialesEnSegundoPlano(30000);
 }
-function confirmarAgregarMaterialOTM(otmId){
+function confirmarAgregarMaterialOTM(otmId, enviarWA){
   const codigo = document.getElementById('qmat_codigo').value;
   const cant = parseFloat(document.getElementById('qmat_cant').value);
   if(!codigo){ toast('Selecciona un material de la lista', 'error'); return; }
@@ -1956,6 +2059,7 @@ function confirmarAgregarMaterialOTM(otmId){
   if(!m){ toast('Material no encontrado en el catálogo', 'error'); return; }
   const o = OTMS.find(x=>x.id===otmId);
   sumarMaterialAOTM(o, m, cant);
+  registrarMatNuevo(otmId, m, cant);
   syncOTM(o);
   if(cant > m.stock){
     toast(`Se registró la necesidad de ${cant} ${m.unidad}. Stock disponible: ${m.stock} — considera pasar la OTM a "Esperando material".`, 'error');
@@ -1964,6 +2068,7 @@ function confirmarAgregarMaterialOTM(otmId){
   }
   closeModal();
   paintGestionCards();
+  if(enviarWA) enviarMatNuevosWhatsApp(otmId);
 }
 
 /* =========================================================
@@ -1990,6 +2095,7 @@ function renderMateriales(){
     <div class="bg-white rounded-xl border border-ink-100 shadow-card py-2.5"><p class="text-lg font-bold text-red-600 leading-none">${MATERIALES_CARGADOS ? sin : '…'}</p><p class="text-[11px] text-ink-500 mt-1">Sin stock</p></div>
   </div>
 
+  <div id="matPendientes"></div>
   <div class="bg-white rounded-xl shadow-card border border-ink-100 overflow-hidden">
     <div class="px-4 lg:px-5 py-3 border-b border-ink-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
       <div class="relative w-full sm:w-96">
@@ -2023,6 +2129,7 @@ function renderMateriales(){
   `;
   matLista = MATERIALES; matMostrados = MAT_PAGE;
   paintMateriales();
+  paintMatPendientes();
 }
 function paintMateriales(){
   const body = document.getElementById('matBody');
@@ -2137,7 +2244,8 @@ function openAsociarMaterial(codigo){
         </div>
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
           <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
-          <button onclick="confirmarAsociarMaterial()" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar a la OTM</button>
+          <button onclick="confirmarAsociarMaterial(true)" title="Agregar y enviar por WhatsApp solo los materiales recién añadidos" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">${iconWhatsapp()}<span class="hidden sm:inline">Agregar y enviar</span><span class="sm:hidden">Enviar</span></button>
+          <button onclick="confirmarAsociarMaterial(false)" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar a la OTM</button>
         </div>
       </div>
     </div>
@@ -2145,7 +2253,7 @@ function openAsociarMaterial(codigo){
   paintAsocFiltro();
   cargarMaterialesEnSegundoPlano(30000);   // confirma el stock actual mientras eliges la OTM
 }
-function confirmarAsociarMaterial(){
+function confirmarAsociarMaterial(enviarWA){
   const m = MATERIALES.find(x=>x.codigo===asocCodigo);
   const otmId = document.getElementById('asoc_otm').value;
   const cant = parseFloat(document.getElementById('asoc_cant').value);
@@ -2154,6 +2262,7 @@ function confirmarAsociarMaterial(){
   const o = OTMS.find(x=>x.id===otmId);
   if(!o || !m) return;
   sumarMaterialAOTM(o, m, cant);
+  registrarMatNuevo(otmId, m, cant);
   syncOTM(o);
   if(cant > m.stock){
     toast(`Se registró la necesidad de ${cant} ${m.unidad}. Stock disponible: ${m.stock} — se recomienda pasar la OTM a "Esperando material".`, 'error');
@@ -2161,6 +2270,8 @@ function confirmarAsociarMaterial(){
     toast(`${m.codigo} agregado a ${otmId} (${cant} ${m.unidad})`);
   }
   closeModal();
+  if(enviarWA) enviarMatNuevosWhatsApp(otmId);   // envía SOLO los recién añadidos
+  else paintMatPendientes();
 }
 
 
