@@ -889,7 +889,7 @@ let crearState = {
 };
 
 function renderCrear(){
-  crearState = { equipoDni:'', actividadNombre:'', actividadTipo:'', actividadLibre:false, selectedTecnicos:[], externoActivo:false, materiales:[] };
+  crearState = { equipoDni:'', actividadNombre:'', actividadTipo:'', actividadLibre:false, selectedTecnicos:[], externoActivo:false, materiales:[], idOTM:null };
   document.getElementById('view-crear').innerHTML = `
   <div class="bg-white rounded-xl shadow-card border border-ink-100 max-w-3xl mx-auto">
     <div class="px-5 lg:px-8 py-5 border-b border-ink-100">
@@ -1232,7 +1232,9 @@ function construirOTMDesdeFormulario(){
   const fecha = fechaDesdeInput(fechaTxt);
 
   return {
-    id: `OTM-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*90+10)}`,
+    // Mismo ID en los reintentos del mismo formulario: si un intento falla a medias,
+    // el siguiente ACTUALIZA esa fila en vez de crear una OTM duplicada.
+    id: crearState.idOTM || (crearState.idOTM = `OTM-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*90+10)}`),
     fecha,
     equipo: equipo.nombre,
     dni: equipo.dni,
