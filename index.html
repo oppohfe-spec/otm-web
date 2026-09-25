@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#111826">
 <title>OTM · Gestión de Órdenes de Trabajo de Mantenimiento</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,6 +60,31 @@
   .date-pills-track{scrollbar-width:none;}
   .date-pills-track::-webkit-scrollbar{display:none;}
   .otm-card{transition:box-shadow .15s;}
+
+  /* ===== Celular / tablet ===== */
+  .bottom-nav{padding-bottom:env(safe-area-inset-bottom);}
+  .bottom-nav button.active{color:#0a6ed1;}
+  .bottom-nav button.active svg{stroke-width:2.2;}
+  @media (max-width:1023px){
+    main{padding-bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
+    #toastContainer{left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));}
+    #toastContainer .toast{max-width:none;}
+    .form-actions{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));z-index:5;background:#fff;
+      margin:0 -1.25rem -1.5rem;padding:12px 1.25rem;border-top:1px solid #e8ecf1;border-radius:0 0 12px 12px;}
+  }
+  @media (max-width:639px){
+    /* evita el zoom automático de iPhone al tocar un campo */
+    input, select, textarea{font-size:16px !important;}
+    /* modales como hoja inferior, a pantalla completa de ancho */
+    .modal-backdrop{align-items:flex-end !important;padding:0 !important;}
+    .modal-panel{max-width:100% !important;width:100%;border-radius:16px 16px 0 0 !important;max-height:92vh !important;
+      overflow-y:auto;padding-bottom:env(safe-area-inset-bottom);animation:sheetin .22s ease-out;}
+    @keyframes sheetin{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+    /* botones de acción más grandes para el dedo */
+    .act-btn{padding:10px !important;}
+    .act-btn svg{width:20px;height:20px;}
+    .chip-prioridad, .chip-responsable{flex:1 1 auto;text-align:center;}
+  }
 </style>
 </head>
 <body class="text-ink-800 antialiased">
@@ -122,14 +148,14 @@
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
           <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
         </button>
-        <button onclick="navigate('crear')" class="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-3.5 py-2 rounded-lg shadow-card transition">
+        <button onclick="navigate('crear')" class="hidden lg:flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-3.5 py-2 rounded-lg shadow-card transition">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
           <span class="hidden sm:inline">Reportar OTM</span>
         </button>
       </div>
     </header>
 
-    <main class="flex-1 p-4 lg:p-6 max-w-[1400px] w-full mx-auto">
+    <main class="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto">
       <div id="view-dashboard" class="hidden"></div>
       <div id="view-crear" class="hidden"></div>
       <div id="view-gestion"></div>
@@ -137,6 +163,18 @@
     </main>
   </div>
 </div>
+
+<!-- Barra de navegación inferior (celular y tablet) -->
+<nav class="bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-20 bg-white border-t border-ink-100 grid grid-cols-4 text-[11px] font-medium text-ink-500">
+  <button data-view="gestion" onclick="navigate('gestion')" class="active flex flex-col items-center justify-center gap-0.5 h-16">
+    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>OTM del día</button>
+  <button data-view="crear" onclick="navigate('crear')" class="flex flex-col items-center justify-center gap-0.5 h-16">
+    <span class="w-9 h-9 -mt-1 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-pop"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></span>Reportar</button>
+  <button data-view="materiales" onclick="navigate('materiales')" class="flex flex-col items-center justify-center gap-0.5 h-16">
+    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-8.25-4.5L3.75 7.5m16.5 0l-8.25 4.5m8.25-4.5v9L12 21m0-9L3.75 7.5m8.25 4.5V21M3.75 7.5v9L12 21"/></svg>Materiales</button>
+  <button data-view="dashboard" onclick="navigate('dashboard')" class="flex flex-col items-center justify-center gap-0.5 h-16">
+    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z"/></svg>Dashboard</button>
+</nav>
 
 <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
 <div id="modalRoot"></div>
@@ -197,7 +235,7 @@ async function apiPost(action, payload, intentos=2){
         method:'POST', cache:'no-store',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({action, payload})
-      });
+      }, 90000);   // escrituras: hasta 90 s (Apps Script puede tardar en "despertar")
       if(!res.ok) throw new Error('Error del servidor ('+res.status+')');
       const data = await res.json();
       if(!data.ok) throw new Error(data.error || 'Error desconocido guardando en el Sheet');
@@ -330,7 +368,10 @@ const TZ = 'America/Lima';
 const _fmtISO = new Intl.DateTimeFormat('en-CA',{timeZone:TZ, year:'numeric', month:'2-digit', day:'2-digit'});
 function isoDate(d){ return _fmtISO.format(d); }            // 'YYYY-MM-DD' en hora Lima
 function hoyLima(){ return isoDate(new Date()); }
-function fechaDesdeInput(v){ return new Date(v + 'T12:00:00-05:00'); } // mediodía Lima: nunca cambia de día
+const _fmtHora = new Intl.DateTimeFormat('en-GB',{timeZone:TZ, hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'});
+function horaLima(d=new Date()){ return _fmtHora.format(d); }  // 'HH:MM:SS' en hora Lima
+/* Fecha elegida + HORA REAL del registro (hora Perú, UTC-5 fijo: Perú no usa horario de verano) */
+function fechaDesdeInput(v){ return new Date(`${v}T${horaLima()}-05:00`); }
 function fmtDate(d){
   return d.toLocaleDateString('es-PE',{timeZone:TZ, day:'2-digit',month:'2-digit',year:'numeric'});
 }
@@ -341,7 +382,7 @@ function fmtDateTime(d){
 function normalizarFechaOTM(iso){
   const d = new Date(iso);
   if(isNaN(d)) return new Date();
-  if(d.getUTCHours()===0 && d.getUTCMinutes()===0 && d.getUTCSeconds()===0){
+  if(d.getUTCHours()===0 && d.getUTCMinutes()===0 && d.getUTCSeconds()===0 && d.getUTCMilliseconds()===0){
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 17, 0, 0));
   }
   return d;
@@ -533,7 +574,7 @@ const TITLES = {
 function navigate(view){
   document.querySelectorAll('[id^="view-"]').forEach(el=>el.classList.add('hidden'));
   document.getElementById('view-'+view).classList.remove('hidden');
-  document.querySelectorAll('.nav-link').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
+  document.querySelectorAll('.nav-link, .bottom-nav button').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
   document.getElementById('pageTitle').textContent = TITLES[view][0];
   document.getElementById('pageSubtitle').textContent = TITLES[view][1];
   if(view==='dashboard') renderDashboard();
@@ -1047,10 +1088,10 @@ function renderCrear(){
         </div>
       </div>
 
-      <div class="flex flex-col sm:flex-row justify-end gap-3 pt-2">
-        <button type="button" onclick="navigate('gestion')" class="px-4 py-2.5 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
-        <button type="button" data-guardar onclick="registrarYCompartirWhatsApp()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-card">${iconWhatsapp()} Registrar y enviar por WhatsApp</button>
-        <button type="submit" data-guardar class="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium shadow-card">Registrar OTM</button>
+      <div class="form-actions flex flex-row justify-end gap-2 sm:gap-3 pt-2">
+        <button type="button" onclick="navigate('gestion')" class="hidden sm:block px-4 py-2.5 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+        <button type="button" data-guardar onclick="registrarYCompartirWhatsApp()" title="Registrar y enviar por WhatsApp" class="flex items-center justify-center gap-2 px-4 sm:px-5 py-3 sm:py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-card">${iconWhatsapp()} <span class="hidden sm:inline">Registrar y enviar por WhatsApp</span><span class="sm:hidden">WhatsApp</span></button>
+        <button type="submit" data-guardar class="flex-1 sm:flex-none px-5 py-3 sm:py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium shadow-card">Registrar OTM</button>
       </div>
     </form>
   </div>
@@ -1391,7 +1432,7 @@ function renderGestion(){
     </div>
   </div>
 
-  <div id="otmCards" class="space-y-3"></div>
+  <div id="otmCards" class="grid grid-cols-1 xl:grid-cols-2 gap-3"></div>
   `;
   document.getElementById('filtrosPanel').classList.toggle('hidden', !filtrosAbiertos);
   paintGestionCards();
@@ -1435,11 +1476,15 @@ function paintGestionCards(){
     const desc = [o.componente!=='—'?o.componente:'', o.sintoma!=='—'?o.sintoma:''].filter(Boolean).join(' — ') || o.actividad;
     return `
     <div class="otm-card bg-white rounded-xl border border-ink-100 shadow-card hover:shadow-pop flex">
-      <div class="flex flex-col items-center justify-between py-4 px-2.5 border-r border-ink-100 bg-ink-50/40 rounded-l-xl">
+      <div class="hidden sm:flex flex-col items-center justify-between py-4 px-2.5 border-r border-ink-100 bg-ink-50/40 rounded-l-xl">
         <span class="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold tracking-wide text-ink-400 whitespace-nowrap">${o.id}</span>
         <span class="chip mt-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white ${ORDEN_SAP_COLOR[orden]}">${orden}</span>
       </div>
-      <div class="flex-1 min-w-0 p-4">
+      <div class="flex-1 min-w-0 p-3.5 sm:p-4">
+        <div class="sm:hidden flex items-center gap-2 mb-1.5">
+          <span class="chip px-2 py-0.5 rounded-md text-[10px] font-bold text-white ${ORDEN_SAP_COLOR[orden]}">${orden}</span>
+          <span class="text-[11px] font-semibold text-ink-400">${o.id}</span>
+        </div>
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <h4 class="font-semibold text-ink-900 text-sm truncate">${o.actividad}${o.esActividadLibre?' <span class=\"text-brand-500 font-normal\">(texto libre)</span>':''}</h4>
@@ -1451,7 +1496,7 @@ function paintGestionCards(){
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-ink-100 text-xs">
           ${badgeEstado(o.estado)}
           <span class="text-ink-500">Responsable: <span class="font-medium text-ink-700">${o.responsable}</span></span>
-          <span class="text-ink-500">Fecha: <span class="font-medium text-ink-700">${fmtDate(o.fecha)}</span></span>
+          <span class="text-ink-500">Fecha: <span class="font-medium text-ink-700">${fmtDateTime(o.fecha)}</span></span>
           ${esConFuga(o) ? `<span class="text-amber-600 font-medium">⚠ Con fuga</span>` : ''}
           ${o.materiales.length ? `<span class="text-ink-500">${o.materiales.length} material(es)</span>` : ''}
           ${o.personalAsignado.length ? `<span class="text-ink-500">${o.personalAsignado.length} técnico(s)</span>` : `<span class="text-amber-600">Sin personal asignado</span>`}
@@ -1459,16 +1504,16 @@ function paintGestionCards(){
         <div class="flex items-center justify-between mt-3">
           <button onclick="openAgregarMaterialOTM('${o.id}')" class="px-3 py-1.5 rounded-lg border border-dashed border-ink-300 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-600">+ Agregar material</button>
           <div class="flex gap-1">
-            <button onclick="openOTM('${o.id}','ver')" title="Ver / ejecutar" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
+            <button onclick="openOTM('${o.id}','ver')" title="Ver / ejecutar" class="act-btn p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </button>
-            <button onclick="openOTM('${o.id}','editar')" title="Editar" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
+            <button onclick="openOTM('${o.id}','editar')" title="Editar" class="act-btn p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
             </button>
-            <button onclick="openOTM('${o.id}','estado')" title="Cambiar estado" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
+            <button onclick="openOTM('${o.id}','estado')" title="Cambiar estado" class="act-btn p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
             </button>
-            ${o.estado!=='Completada' ? `<button onclick="openEliminarModal('${o.id}')" title="Eliminar OTM" class="p-1.5 rounded-md hover:bg-red-50 text-ink-500 hover:text-red-600">
+            ${o.estado!=='Completada' ? `<button onclick="openEliminarModal('${o.id}')" title="Eliminar OTM" class="act-btn p-1.5 rounded-md hover:bg-red-50 text-ink-500 hover:text-red-600">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
             </button>` : ''}
           </div>
@@ -1524,7 +1569,7 @@ function openVerModal(o){
         <div class="px-5 pt-4">${stepFlow(o)}</div>
         <div class="px-5">
           <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm pb-4 border-b border-ink-100">
-            <div><p class="text-xs text-ink-400">Fecha</p><p class="text-ink-800 font-medium">${fmtDate(o.fecha)}</p></div>
+            <div><p class="text-xs text-ink-400">Fecha</p><p class="text-ink-800 font-medium">${fmtDateTime(o.fecha)}</p></div>
             <div><p class="text-xs text-ink-400">Estado</p>${badgeEstado(o.estado)}</div>
             <div><p class="text-xs text-ink-400">Equipo</p><p class="text-ink-800 font-medium">${o.equipo}</p></div>
             <div><p class="text-xs text-ink-400">DNI SAP</p><p class="text-ink-800 font-medium">${o.dni}</p></div>
@@ -1830,19 +1875,26 @@ function openEliminarModal(id){
       </div>
     </div>`;
 }
+/* Se quita de la pantalla al instante y se borra del Sheet en segundo plano.
+   Si el Sheet falla, la OTM vuelve a aparecer. */
 async function confirmarEliminarOTM(id){
-  const btn = document.getElementById('btnConfirmEliminar');
-  if(btn){ btn.disabled = true; btn.textContent = 'Eliminando…'; }
+  const idx = OTMS.findIndex(x=>x.id===id);
+  if(idx < 0){ closeModal(); return; }
+  const [quitada] = OTMS.splice(idx, 1);
+  closeModal();
+  paintGestionCards();
+  pendientesSync++; paintSyncStatus();
   try{
     await apiPost('eliminar_otm', {id});
-    OTMS = OTMS.filter(x=>x.id!==id);
-    closeModal();
-    paintGestionCards();
     toast(`OTM ${id} eliminada`);
   }catch(err){
-    toast('No se pudo eliminar: '+err.message, 'error');
-    if(btn){ btn.disabled = false; btn.textContent = 'Eliminar'; }
-  }
+    if(/no se encontr/i.test(err.message)){ toast(`OTM ${id} eliminada`); }   // ya no existía en el Sheet
+    else{
+      OTMS.splice(idx, 0, quitada);
+      paintGestionCards();
+      toast('No se pudo eliminar: '+err.message, 'error');
+    }
+  }finally{ pendientesSync--; paintSyncStatus(); }
 }
 
 /* Agrega (o suma) un material a una OTM */
@@ -1926,10 +1978,16 @@ function renderMateriales(){
   const bajo = MATERIALES.filter(m=>m.stock>0 && m.stock<m.min).length;
   const sin = MATERIALES.filter(m=>m.stock===0).length;
   document.getElementById('view-materiales').innerHTML = `
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 mb-4">
+  <div class="hidden sm:grid grid-cols-3 gap-3 lg:gap-4 mb-4">
     ${kpiCard('Total materiales', MATERIALES_CARGADOS ? MATERIALES.length : '…', 'ítems en catálogo', 'brand', iconClip())}
     ${kpiCard('Stock bajo', MATERIALES_CARGADOS ? bajo : '…', 'requieren reposición', 'amber', iconClock())}
     ${kpiCard('Sin stock', MATERIALES_CARGADOS ? sin : '…', 'ítems agotados', 'ink', iconPause())}
+  </div>
+  <!-- Celular: resumen compacto en una sola fila -->
+  <div class="sm:hidden grid grid-cols-3 gap-2 mb-3 text-center">
+    <div class="bg-white rounded-xl border border-ink-100 shadow-card py-2.5"><p class="text-lg font-bold text-ink-900 leading-none">${MATERIALES_CARGADOS ? MATERIALES.length : '…'}</p><p class="text-[11px] text-ink-500 mt-1">Materiales</p></div>
+    <div class="bg-white rounded-xl border border-ink-100 shadow-card py-2.5"><p class="text-lg font-bold text-amber-600 leading-none">${MATERIALES_CARGADOS ? bajo : '…'}</p><p class="text-[11px] text-ink-500 mt-1">Stock bajo</p></div>
+    <div class="bg-white rounded-xl border border-ink-100 shadow-card py-2.5"><p class="text-lg font-bold text-red-600 leading-none">${MATERIALES_CARGADOS ? sin : '…'}</p><p class="text-[11px] text-ink-500 mt-1">Sin stock</p></div>
   </div>
 
   <div class="bg-white rounded-xl shadow-card border border-ink-100 overflow-hidden">
@@ -1938,7 +1996,7 @@ function renderMateriales(){
         <svg class="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/></svg>
         <input id="matSearch" oninput="onMatSearch()" type="text" placeholder="Ej.: codo pvc 2  ·  palabras en cualquier orden" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span id="matStockInfo" class="text-[11px] text-ink-400">${matCargando ? 'Actualizando stock…' : horaStock()}</span>
         <button onclick="cargarMaterialesEnSegundoPlano()" title="Actualizar stock" class="text-xs font-medium text-brand-600 hover:text-brand-700">↻ Actualizar</button>
         <p class="text-xs text-ink-400"><span id="matCount" class="font-medium text-ink-700">${MATERIALES.length}</span> materiales</p>
@@ -1949,12 +2007,12 @@ function renderMateriales(){
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-ink-400 text-xs bg-ink-50/60">
-            <th class="py-2.5 px-4 font-medium">Material</th>
-            <th class="py-2.5 px-4 font-medium">Descripción</th>
-            <th class="py-2.5 px-4 font-medium">Unidad</th>
-            <th class="py-2.5 px-4 font-medium">Stock</th>
-            <th class="py-2.5 px-4 font-medium">Estado</th>
-            <th class="py-2.5 px-4 font-medium text-right">Acciones</th>
+            <th class="hidden sm:table-cell py-2.5 px-4 font-medium">Material</th>
+            <th class="py-2.5 px-3 sm:px-4 font-medium">Descripción</th>
+            <th class="hidden sm:table-cell py-2.5 px-4 font-medium">Unidad</th>
+            <th class="py-2.5 px-3 sm:px-4 font-medium text-right sm:text-left">Stock</th>
+            <th class="hidden sm:table-cell py-2.5 px-4 font-medium">Estado</th>
+            <th class="py-2.5 px-3 sm:px-4 font-medium text-right"><span class="hidden sm:inline">Acciones</span></th>
           </tr>
         </thead>
         <tbody id="matBody"></tbody>
@@ -1983,13 +2041,16 @@ function paintMateriales(){
     else { estado='Disponible'; cls='bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'; }
     return `
     <tr class="border-b border-ink-50 hover:bg-ink-50/60">
-      <td class="py-2.5 px-4 font-medium text-ink-800 whitespace-nowrap">${esc(m.codigo)}</td>
-      <td class="py-2.5 px-4 text-ink-600">${esc(m.desc)}</td>
-      <td class="py-2.5 px-4 text-ink-500">${esc(m.unidad)}</td>
-      <td class="py-2.5 px-4 text-ink-800 font-medium">${m.stock}</td>
-      <td class="py-2.5 px-4"><span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${cls}">${estado}</span></td>
-      <td class="py-2.5 px-4 text-right">
-        <button onclick="openAsociarMaterial('${jsq(m.codigo)}')" class="text-xs font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap">+ Asociar a OTM</button>
+      <td class="hidden sm:table-cell py-2.5 px-4 font-medium text-ink-800 whitespace-nowrap">${esc(m.codigo)}</td>
+      <td class="py-2.5 px-3 sm:px-4 text-ink-600">
+        <span class="sm:hidden block text-[11px] font-semibold text-ink-400">${esc(m.codigo)}</span>${esc(m.desc)}
+      </td>
+      <td class="hidden sm:table-cell py-2.5 px-4 text-ink-500">${esc(m.unidad)}</td>
+      <td class="py-2.5 px-3 sm:px-4 text-ink-800 font-medium text-right sm:text-left whitespace-nowrap">${m.stock}<span class="sm:hidden text-[11px] text-ink-400 font-normal"> ${esc(m.unidad)}</span>
+        <span class="sm:hidden block"><span class="chip px-1.5 py-0.5 rounded-full text-[10px] font-medium ${cls}">${estado}</span></span></td>
+      <td class="hidden sm:table-cell py-2.5 px-4"><span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${cls}">${estado}</span></td>
+      <td class="py-2.5 px-3 sm:px-4 text-right">
+        <button onclick="openAsociarMaterial('${jsq(m.codigo)}')" class="text-xs font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap px-2 py-2 sm:p-0">+ <span class="hidden sm:inline">Asociar a </span>OTM</button>
       </td>
     </tr>`;
   }).join('');
