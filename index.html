@@ -71,7 +71,6 @@
       <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center font-bold text-white text-sm">OT</div>
       <div>
         <p class="text-white font-semibold text-sm leading-tight">OTM Manager</p>
-        <p class="text-[11px] text-ink-400 leading-tight">Planta de Tratamiento</p>
       </div>
       <button onclick="toggleSidebar()" class="ml-auto lg:hidden text-ink-400 hover:text-white">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -102,13 +101,7 @@
       </div>
     </div>
     <div class="p-3 border-t border-white/10">
-      <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
-        <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-semibold">JB</div>
-        <div class="leading-tight">
-          <p class="text-xs font-medium text-white">J. Bellodas</p>
-          <p class="text-[11px] text-ink-400">Supervisor de Mantenimiento</p>
-        </div>
-      </div>
+      <p id="syncStatus" class="px-3 text-[11px] text-ink-400"></p>
     </div>
   </aside>
   <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/40 z-20 lg:hidden"></div>
@@ -157,30 +150,84 @@ const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
 };
 
-async function apiGet(){
-  const res = await fetch(CONFIG.API_URL + '?action=snapshot', {method:'GET'});
-  if(!res.ok) throw new Error('No se pudo leer el Sheet ('+res.status+')');
-  const data = await res.json();
-  if(!data.ok) throw new Error(data.error || 'Error desconocido leyendo el Sheet');
-  return data;
-}
-async function apiPost(action, payload){
-  // Content-Type text/plain evita el preflight CORS que Apps Script no responde bien
-  const res = await fetch(CONFIG.API_URL, {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify({action, payload})
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+
+/* fetch con tiempo límite.
+   No se usa AbortController/signal: algunos entornos (vistas previas, WebViews,
+   extensiones) reemplazan fetch por postMessage y no pueden clonar un AbortSignal
+   → "DataCloneError: AbortSignal object could not be cloned". */
+function fetchTimeout(url, opts={}, ms=45000){
+  let t;
+  const limite = new Promise((_, rej)=>{
+    t = setTimeout(()=>{ const e = new Error('Tiempo de espera agotado'); e.name='AbortError'; rej(e); }, ms);
   });
-  const data = await res.json();
-  if(!data.ok) throw new Error(data.error || 'Error desconocido guardando en el Sheet');
-  return data;
+  return Promise.race([fetch(url, opts), limite]).finally(()=>clearTimeout(t));
+}
+
+/*
+ * GET con anti-caché + reintentos.
+ * El 404 intermitente ocurre porque Apps Script responde con una redirección a
+ * script.googleusercontent.com cuyo enlace caduca; si el navegador reutiliza esa
+ * redirección guardada en caché (al reabrir la pestaña) obtiene 404.
+ * Solución: parámetro único (_=timestamp), cache:'no-store' y reintentar.
+ */
+async function apiGet(action='snapshot', intentos=3){
+  let ultimoError;
+  for(let i=0;i<intentos;i++){
+    try{
+      const url = `${CONFIG.API_URL}?action=${action}&_=${Date.now()}_${i}`;
+      const res = await fetchTimeout(url, {method:'GET', cache:'no-store', redirect:'follow'});
+      if(!res.ok) throw new Error('No se pudo leer el Sheet ('+res.status+')');
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Error desconocido leyendo el Sheet');
+      return data;
+    }catch(err){
+      ultimoError = err.name==='AbortError' ? new Error('Tiempo de espera agotado') : err;
+      if(i < intentos-1) await sleep(800*(i+1));
+    }
+  }
+  throw ultimoError;
+}
+async function apiPost(action, payload, intentos=2){
+  let ultimoError;
+  for(let i=0;i<intentos;i++){
+    try{
+      // Content-Type text/plain evita el preflight CORS que Apps Script no responde bien
+      const res = await fetchTimeout(CONFIG.API_URL, {
+        method:'POST', cache:'no-store',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({action, payload})
+      });
+      if(!res.ok) throw new Error('Error del servidor ('+res.status+')');
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Error desconocido guardando en el Sheet');
+      return data;
+    }catch(err){
+      ultimoError = err.name==='AbortError' ? new Error('Tiempo de espera agotado') : err;
+      // si el servidor respondió con un error de negocio, no se reintenta
+      if(err.message && !/servidor|Failed to fetch|Tiempo|NetworkError|Load failed/i.test(ultimoError.message)) break;
+      if(i < intentos-1) await sleep(1000);
+    }
+  }
+  throw ultimoError;
+}
+let pendientesSync = 0;
+function paintSyncStatus(){
+  const el = document.getElementById('syncStatus');
+  if(el) el.textContent = pendientesSync ? `Guardando ${pendientesSync} cambio(s)…` : '';
 }
 function syncOTM(o){
-  apiPost('upsert_otm', {otm:o}).catch(err=>{
-    console.error(err);
-    toast('No se pudo sincronizar con el Sheet: '+err.message, 'error');
-  });
+  pendientesSync++; paintSyncStatus();
+  return apiPost('upsert_otm', {otm:o})
+    .catch(err=>{
+      console.error(err);
+      toast('No se pudo sincronizar con el Sheet: '+err.message, 'error');
+      return false;
+    })
+    .finally(()=>{ pendientesSync--; paintSyncStatus(); });
 }
+// Aviso si el usuario intenta cerrar la página con cambios aún guardándose
+window.addEventListener('beforeunload', e=>{ if(pendientesSync>0){ e.preventDefault(); e.returnValue=''; } });
 
 /* =========================================================
    DATOS MAESTROS (se cargan desde el Google Sheet al iniciar;
@@ -278,42 +325,191 @@ const PRIORIDADES = ['Alta','Media','Baja'];
 /* =========================================================
    UTILIDADES
    ========================================================= */
-function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
-function isoDate(d){ return d.toISOString().slice(0,10); }
+/* ---- Fechas SIEMPRE en hora de Perú (America/Lima, UTC-5, sin horario de verano) ---- */
+const TZ = 'America/Lima';
+const _fmtISO = new Intl.DateTimeFormat('en-CA',{timeZone:TZ, year:'numeric', month:'2-digit', day:'2-digit'});
+function isoDate(d){ return _fmtISO.format(d); }            // 'YYYY-MM-DD' en hora Lima
+function hoyLima(){ return isoDate(new Date()); }
+function fechaDesdeInput(v){ return new Date(v + 'T12:00:00-05:00'); } // mediodía Lima: nunca cambia de día
 function fmtDate(d){
-  return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  return d.toLocaleDateString('es-PE',{timeZone:TZ, day:'2-digit',month:'2-digit',year:'numeric'});
 }
+function fmtDateTime(d){
+  return d.toLocaleString('es-PE',{timeZone:TZ, day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+/* Las OTM antiguas se guardaron a las 00:00 UTC (= día anterior en Perú). Se corrigen al leer. */
+function normalizarFechaOTM(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return new Date();
+  if(d.getUTCHours()===0 && d.getUTCMinutes()===0 && d.getUTCSeconds()===0){
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 17, 0, 0));
+  }
+  return d;
+}
+/* Semanas (lunes a domingo) calculadas sobre la fecha Lima */
+function addDaysISO(iso, n){ const d = new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function lunesDeISO(iso){ const d = new Date(iso+'T00:00:00Z'); const dow = (d.getUTCDay()+6)%7; return addDaysISO(iso, -dow); }
+function numSemanaISO(iso){
+  const d = new Date(iso+'T00:00:00Z'); const dow = (d.getUTCDay()+6)%7;
+  d.setUTCDate(d.getUTCDate() - dow + 3);                 // jueves de esa semana
+  const inicioAnio = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return Math.ceil(((d - inicioAnio)/86400000 + 1)/7);
+}
+function ultimasSemanas(n=3){
+  const lunes = lunesDeISO(hoyLima());
+  return Array.from({length:n}, (_,i)=>{
+    const ini = addDaysISO(lunes, -7*i), fin = addDaysISO(ini, 6);
+    return {ini, fin, num:numSemanaISO(ini), label: i===0?'Semana actual':(i===1?'Semana pasada':'Hace 2 semanas')};
+  });
+}
+const ddmm = iso => iso.slice(8,10)+'/'+iso.slice(5,7);
+
+/* ---- Búsqueda: sin tildes, sin mayúsculas y con palabras en cualquier orden ---- */
+function norm(s){ return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+function tokens(q){ return norm(q).split(/[\s,;]+/).filter(Boolean); }
+function coincide(hay, toks){ return toks.every(t => hay.includes(t)); }
+
+/* Escapa texto para usarlo dentro de onclick="fn('...')" */
+function jsq(s){ return String(s ?? '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 let OTMS = [];
+let MATERIALES_CARGADOS = false;
+let CORE_CARGADO = false;
+let matCargando = null;       // promesa de carga en curso (evita cargas duplicadas)
+let matUltimaCarga = 0;       // hora (ms) de la última lectura del stock
+let MAT_ITEMS = [];   // items pre-calculados para el autocompletado de materiales
+
+/* ---- Caché local (el navegador abre al instante con los últimos datos) ---- */
+function lsGet(k){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ /* sin espacio o modo privado */ } }
 
 /* =========================================================
    CARGA DE DATOS REALES DESDE EL GOOGLE SHEET
    ========================================================= */
-async function loadDataFromSheet(){
-  const data = await apiGet(); // { equipos, actividades, personal, materiales, otms }
-
+function aplicarCore(data){
   EQUIPOS = data.equipos;
   ACTIVIDADES = data.actividades;
   PERSONAL = data.personal;
-  RESPONSABLES = PERSONAL.filter(p=>p.cargo==='Supervisor' && p.estado==='Activo').map(p=>p.nombre);
-  TECNICOS = PERSONAL.filter(p=>p.cargo==='Técnico' && p.estado==='Activo').map(p=>p.nombre);
-  MATERIALES = data.materiales;
-
+  // Comparación tolerante: ignora mayúsculas, tildes y espacios ("TECNICO", "Técnico ", "activo")
+  const activo = p => norm(p.estado).trim()==='activo';
+  const nombres = arr => [...new Set(arr.map(p=>String(p.nombre ?? '').trim()).filter(Boolean))];
+  RESPONSABLES = nombres(PERSONAL.filter(p=> norm(p.cargo).trim()==='supervisor' && activo(p)));
+  TECNICOS = nombres(PERSONAL.filter(p=> norm(p.cargo).trim()==='tecnico' && activo(p)));
+  CORE_CARGADO = true;
   OTMS = data.otms.map(o=>({
     ...o,
-    fecha: new Date(o.fecha),
+    id: String(o.id),
+    equipo: String(o.equipo ?? ''),
+    actividad: String(o.actividad ?? ''),
+    responsable: String(o.responsable ?? ''),
+    fecha: normalizarFechaOTM(o.fecha),
+    materiales: o.materiales || [],
+    personalAsignado: o.personalAsignado || [],
     historial: (o.historial||[]).map(h=>({estado:h.estado, fecha:new Date(h.fecha)})),
   }));
   OTMS.sort((a,b)=> b.fecha - a.fecha);
+  completarDescMateriales();
+}
+/* El catálogo llega en formato compacto [codigo, desc, unidad, stock, min, grupo] */
+function aplicarMateriales(lista){
+  MATERIALES = lista.map(m => Array.isArray(m)
+    ? {codigo:String(m[0]), desc:String(m[1]), unidad:String(m[2]), stock:Number(m[3])||0, min:Number(m[4])||5, grupo:m[5]||''}
+    : {...m, codigo:String(m.codigo), desc:String(m.desc ?? '')});
+  MATERIALES.forEach(m=> m._q = norm(m.codigo+' '+m.desc));
+  MAT_ITEMS = MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad})`, q:m._q}));
+  MATERIALES_CARGADOS = true;
+  completarDescMateriales();
+}
+function completarDescMateriales(){
+  if(!MATERIALES.length) return;
+  const map = {}; MATERIALES.forEach(m=> map[m.codigo]=m);
+  OTMS.forEach(o=> o.materiales.forEach(x=>{
+    const c = map[String(x.codigo)];
+    if(c){ if(!x.desc) x.desc = c.desc; if(!x.unidad) x.unidad = c.unidad; }
+  }));
+}
+function vistaActual(){
+  const v = document.querySelector('[id^="view-"]:not(.hidden)');
+  return v ? v.id.replace('view-','') : 'gestion';
+}
+/* Re-pinta la vista activa sin borrar un formulario que el usuario esté llenando */
+function refrescarVista(){
+  const v = vistaActual();
+  if(v==='crear'){ paintChipsCrear(); return; }   // solo agrega los botones, no borra lo escrito
+  if(document.getElementById('modalRoot').innerHTML) return;
+  if(v==='gestion') renderGestion();
+  if(v==='dashboard') renderDashboard();
+  if(v==='materiales') renderMateriales();
+}
+
+/* Lee el catálogo con el STOCK ACTUAL. Si ya se leyó hace menos de "maxEdadMs", no repite. */
+function horaStock(){ return matUltimaCarga ? 'Stock actualizado a las '+new Date(matUltimaCarga).toLocaleTimeString('es-PE',{timeZone:TZ,hour:'2-digit',minute:'2-digit'}) : ''; }
+function cargarMaterialesEnSegundoPlano(maxEdadMs=0){
+  if(matCargando) return matCargando;
+  if(maxEdadMs && Date.now()-matUltimaCarga < maxEdadMs) return Promise.resolve();
+  const st = document.getElementById('matStockInfo');
+  if(st) st.textContent = 'Actualizando stock…';
+  matCargando = (async ()=>{
+    try{
+      const d = await apiGet('materiales');
+      matUltimaCarga = Date.now();
+      aplicarMateriales(d.materiales);
+      lsSet('otm_cache_mat', d.materiales);
+      if(vistaActual()==='materiales' && !document.getElementById('modalRoot').innerHTML){
+        const q = (document.getElementById('matSearch')||{}).value || '';
+        renderMateriales();
+        if(q){ document.getElementById('matSearch').value = q; filterMateriales(); }
+      }
+      actualizarStockEnModal();
+    }catch(err){
+      console.error(err);
+      toast('No se pudo actualizar el stock: '+err.message, 'error');
+    }finally{
+      matCargando = null;
+      const st2 = document.getElementById('matStockInfo');
+      if(st2) st2.textContent = horaStock();
+    }
+  })();
+  return matCargando;
+}
+/* Si hay un modal de material abierto, refresca el texto de stock con el valor nuevo */
+function actualizarStockEnModal(){
+  const txt = m => `Stock disponible: ${m.stock} ${esc(m.unidad)}${m.stock < m.min ? ' · <span class="text-amber-600 font-medium">stock bajo</span>':''}`;
+  const info = document.getElementById('asoc_stockinfo');
+  if(info && asocCodigo){ const m = MATERIALES.find(x=>x.codigo===asocCodigo); if(m) info.innerHTML = txt(m); }
+  const q = document.getElementById('qmat_codigo');
+  const el = document.getElementById('qmat_stockinfo');
+  if(q && q.value && el){ const m = MATERIALES.find(x=>x.codigo===q.value); if(m) el.innerHTML = txt(m); }
 }
 
 async function initApp(){
   const root = document.getElementById('view-gestion');
-  root.innerHTML = `<div class="flex items-center justify-center py-24 text-ink-400 text-sm">Cargando datos desde Google Sheets…</div>`;
-  try{
-    await loadDataFromSheet();
+  // 1) Pintar al instante con la última copia guardada en este navegador
+  const cacheCore = lsGet('otm_cache_core');
+  const cacheMat = lsGet('otm_cache_mat');
+  if(cacheMat) aplicarMateriales(cacheMat);
+  if(cacheCore){
+    aplicarCore(cacheCore);
     renderGestion();
+    document.getElementById('syncStatus').textContent = 'Actualizando datos…';
+  } else {
+    root.innerHTML = `<div class="flex items-center justify-center py-24 text-ink-400 text-sm">Cargando datos desde Google Sheets…</div>`;
+  }
+  // 2) Datos principales (rápido) y luego materiales (pesado) en segundo plano
+  try{
+    const core = await apiGet('core');
+    aplicarCore(core);
+    lsSet('otm_cache_core', core);
+    paintSyncStatus();
+    refrescarVista();
+    cargarMaterialesEnSegundoPlano();
   }catch(err){
+    if(cacheCore){
+      document.getElementById('syncStatus').textContent = 'Sin conexión: mostrando últimos datos';
+      toast('No se pudo actualizar desde el Sheet: '+err.message, 'error');
+      return;
+    }
     console.error(err);
     root.innerHTML = `<div class="bg-white rounded-xl shadow-card border border-red-200 p-6 text-sm text-red-700">
       No se pudo cargar la información desde el Sheet.<br>
@@ -343,7 +539,8 @@ function navigate(view){
   if(view==='dashboard') renderDashboard();
   if(view==='crear') renderCrear();
   if(view==='gestion') renderGestion();
-  if(view==='materiales') renderMateriales();
+  if(view==='materiales'){ renderMateriales(); cargarMaterialesEnSegundoPlano(30000); }
+  if(view==='crear') cargarMaterialesEnSegundoPlano(30000);
   if(window.innerWidth < 1024){ document.getElementById('sidebar').classList.add('-translate-x-full'); document.getElementById('sidebarOverlay').classList.add('hidden'); }
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -405,29 +602,37 @@ function wireAutocomplete({inputId, listId, itemsProvider, onPick, emptyText}){
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
   if(!input || !list) return;
+  let timer = null;
   function show(query){
     if(input.disabled) return;
     const items = itemsProvider();
-    const q = (query||'').toLowerCase();
-    const filtered = items.filter(it=> it.label.toLowerCase().includes(q));
+    if(items === null){ // catálogo aún cargando
+      list.innerHTML = `<div class="px-3 py-2 text-xs text-ink-400">Cargando catálogo… intenta en unos segundos</div>`;
+      list.classList.remove('hidden'); return;
+    }
+    const toks = tokens(query);
+    const filtered = [];
+    for(const it of items){                 // corta en 60 resultados: rápido aun con 14 000 ítems
+      if(coincide(it.q || (it.q = norm(it.label)), toks)){ filtered.push(it); if(filtered.length>=60) break; }
+    }
     if(filtered.length===0){
       list.innerHTML = `<div class="px-3 py-2 text-xs text-ink-400">${emptyText||'Sin resultados'}</div>`;
     } else {
-      list.innerHTML = filtered.slice(0,60).map(it=>`<div class="ac-opt px-3 py-2 text-sm hover:bg-brand-50 cursor-pointer" data-value="${it.value}" data-label="${it.label.replace(/"/g,'&quot;')}">${it.label}</div>`).join('');
+      list.innerHTML = filtered.map(it=>`<div class="ac-opt px-3 py-2 text-sm hover:bg-brand-50 cursor-pointer" data-value="${esc(it.value)}" data-label="${esc(it.label)}">${esc(it.label)}</div>`).join('');
     }
     list.classList.remove('hidden');
   }
   input.addEventListener('focus', ()=> show(input.value));
-  input.addEventListener('input', ()=> show(input.value));
+  input.addEventListener('input', ()=>{ clearTimeout(timer); timer = setTimeout(()=>show(input.value), 120); });
+  // Se oculta al salir del campo (antes se agregaba un listener global en cada render → fuga de memoria)
+  input.addEventListener('blur', ()=> setTimeout(()=>list.classList.add('hidden'), 150));
   list.addEventListener('mousedown', (e)=>{
     const opt = e.target.closest('.ac-opt');
     if(!opt) return;
+    e.preventDefault();
     input.value = opt.dataset.label;
     list.classList.add('hidden');
     onPick(opt.dataset.value, opt.dataset.label);
-  });
-  document.addEventListener('click', (e)=>{
-    if(e.target!==input && !list.contains(e.target)) list.classList.add('hidden');
   });
 }
 
@@ -566,7 +771,7 @@ function renderDashboard(){
         <p class="text-xs text-ink-400 mb-4">Carga de trabajo por supervisor</p>
         <div class="space-y-3">
           ${RESPONSABLES.map(r=>`
-            <button onclick="setDashFilter('responsable','${r}')" class="filter-bar-btn w-full text-left ${dashboardFilter.responsable && dashboardFilter.responsable!==r ? 'dimmed':''}">
+            <button onclick="setDashFilter('responsable','${jsq(r)}')" class="filter-bar-btn w-full text-left ${dashboardFilter.responsable && dashboardFilter.responsable!==r ? 'dimmed':''}">
               <div class="flex justify-between text-xs mb-1">
                 <span class="text-ink-600">${r}</span>
                 <span class="font-medium text-ink-800">${respCount[r]||0}</span>
@@ -740,7 +945,7 @@ function renderCrear(){
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5">Fecha de la OTM *</label>
-            <input type="date" id="f_fecha" required value="${new Date().toISOString().slice(0,10)}"
+            <input type="date" id="f_fecha" required value="${hoyLima()}"
               class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
           </div>
         </div>
@@ -748,21 +953,17 @@ function renderCrear(){
         <div class="mt-4">
           <label class="block text-sm font-medium text-ink-700 mb-1.5">Prioridad *</label>
           <div class="flex gap-2">
-            ${PRIORIDADES.map((p,i)=>`
+            ${PRIORIDADES.map(p=>`
               <button type="button" onclick="selectChip(this,'prioridad','${p}')" data-group="prioridad" data-value="${p}"
-                class="chip-prioridad px-4 py-2 rounded-lg text-sm font-medium border ${i===1?'bg-ink-800 text-white border-ink-800':'border-ink-200 text-ink-600'}">${p}</button>`).join('')}
+                class="chip-prioridad px-4 py-2 rounded-lg text-sm font-medium border border-ink-200 text-ink-600">${p}</button>`).join('')}
           </div>
-          <input type="hidden" id="f_prioridad" value="Media">
+          <input type="hidden" id="f_prioridad" value="">
         </div>
 
         <div class="mt-4">
           <label class="block text-sm font-medium text-ink-700 mb-1.5">Supervisor responsable *</label>
-          <div class="flex flex-wrap gap-2">
-            ${RESPONSABLES.map((r,i)=>`
-              <button type="button" onclick="selectChip(this,'responsable','${r}')" data-group="responsable" data-value="${r}"
-                class="chip-responsable px-4 py-2 rounded-lg text-sm font-medium border ${i===0?'bg-ink-800 text-white border-ink-800':'border-ink-200 text-ink-600'}">${r}</button>`).join('')}
-          </div>
-          <input type="hidden" id="f_responsable" value="${RESPONSABLES[0]}">
+          <div id="chipsResponsable" class="flex flex-wrap gap-2"></div>
+          <input type="hidden" id="f_responsable" value="">
         </div>
       </div>
 
@@ -800,13 +1001,7 @@ function renderCrear(){
           <span class="text-[11px] text-ink-400">Opcional — puedes asignarlo ahora o al final del día</span>
         </div>
         <div class="border border-ink-200 rounded-lg p-4">
-          <div class="flex flex-wrap gap-2 mb-2">
-            ${TECNICOS.map(t=>`
-              <button type="button" onclick="toggleTecnico(this,'${t}')"
-                class="tecnico-chip px-3 py-1.5 rounded-full text-xs font-medium border border-ink-200 text-ink-600 hover:border-brand-400 hover:text-brand-600 transition">
-                ${t}
-              </button>`).join('')}
-          </div>
+          <div id="chipsTecnicos" class="flex flex-wrap gap-2 mb-2"></div>
           <p class="text-xs text-ink-400 mb-3">Seleccionados: <span id="tecnicosCount" class="font-medium text-ink-600">0</span></p>
 
           <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -841,7 +1036,7 @@ function renderCrear(){
             </div>
             <div class="mt-3 flex items-center gap-3">
               <label class="text-sm font-medium text-ink-700">Cantidad</label>
-              <input type="number" id="f_material_cant" min="1" value="1" class="w-24 border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <input type="number" id="f_material_cant" min="0.01" step="any" value="1" class="w-24 border border-ink-200 rounded-lg px-3 py-2 text-sm">
             </div>
             <div class="flex gap-2 mt-3">
               <button type="button" onclick="agregarMaterialForm()" class="px-4 py-2 rounded-lg bg-ink-800 hover:bg-ink-900 text-white text-sm font-medium">Agregar</button>
@@ -854,14 +1049,39 @@ function renderCrear(){
 
       <div class="flex flex-col sm:flex-row justify-end gap-3 pt-2">
         <button type="button" onclick="navigate('gestion')" class="px-4 py-2.5 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
-        <button type="button" onclick="registrarYCompartirWhatsApp()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-card">${iconWhatsapp()} Registrar y enviar por WhatsApp</button>
-        <button type="submit" class="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium shadow-card">Registrar OTM</button>
+        <button type="button" data-guardar onclick="registrarYCompartirWhatsApp()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-card">${iconWhatsapp()} Registrar y enviar por WhatsApp</button>
+        <button type="submit" data-guardar class="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium shadow-card">Registrar OTM</button>
       </div>
     </form>
   </div>
   `;
   paintMaterialesForm();
+  paintChipsCrear();
   wireCrearAutocompletes();
+}
+
+/* Pinta los botones de supervisores y técnicos. Se vuelve a llamar cuando llegan los
+   datos del Sheet, así el formulario nunca queda vacío si se abrió mientras cargaba. */
+function paintChipsCrear(){
+  const cR = document.getElementById('chipsResponsable');
+  const cT = document.getElementById('chipsTecnicos');
+  if(!cR || !cT) return;
+  const selR = document.getElementById('f_responsable').value;
+  const aviso = tipo => !CORE_CARGADO
+    ? `<span class="text-xs text-ink-400">Cargando ${tipo}…</span>`
+    : `<span class="text-xs text-amber-600">No hay ${tipo} activos. Revisa la hoja TRABAJADORES (Cargo = "${tipo==='supervisores'?'Supervisor':'Técnico'}", Estado = "Activo").</span>`;
+  cR.innerHTML = RESPONSABLES.length ? RESPONSABLES.map(r=>{
+    const on = r===selR;
+    return `<button type="button" onclick="selectChip(this,'responsable','${jsq(r)}')" data-group="responsable" data-value="${esc(r)}"
+      class="chip-responsable px-4 py-2 rounded-lg text-sm font-medium border ${on?'bg-ink-800 text-white border-ink-800':'border-ink-200 text-ink-600'}">${esc(r)}</button>`;
+  }).join('') : aviso('supervisores');
+  crearState.selectedTecnicos = crearState.selectedTecnicos.filter(t=>TECNICOS.includes(t));
+  cT.innerHTML = TECNICOS.length ? TECNICOS.map(t=>{
+    const on = crearState.selectedTecnicos.includes(t);
+    return `<button type="button" onclick="toggleTecnico(this,'${jsq(t)}')"
+      class="tecnico-chip px-3 py-1.5 rounded-full text-xs font-medium border ${on?'bg-brand-600 text-white border-brand-600':'border-ink-200 text-ink-600'} hover:border-brand-400 transition">${esc(t)}</button>`;
+  }).join('') : aviso('técnicos');
+  document.getElementById('tecnicosCount').textContent = crearState.selectedTecnicos.length;
 }
 
 function wireCrearAutocompletes(){
@@ -894,7 +1114,7 @@ function wireCrearAutocompletes(){
   });
   wireAutocomplete({
     inputId:'ac_input_material', listId:'ac_list_material',
-    itemsProvider: ()=> MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad})`})),
+    itemsProvider: ()=> MATERIALES_CARGADOS ? MAT_ITEMS : null,
     onPick: (codigo)=>{ document.getElementById('f_material_codigo').value = codigo; },
     emptyText:'No se encontró el material'
   });
@@ -945,10 +1165,14 @@ function cerrarMaterialForm(){
 }
 function agregarMaterialForm(){
   const codigo = document.getElementById('f_material_codigo').value;
-  const cant = parseInt(document.getElementById('f_material_cant').value)||1;
+  const cant = parseFloat(document.getElementById('f_material_cant').value);
   if(!codigo){ toast('Selecciona un material de la lista', 'error'); return; }
-  const m = MATERIALES.find(x=>x.codigo===codigo);
-  crearState.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, stock:m.stock});
+  if(!(cant > 0)){ toast('La cantidad debe ser mayor a 0', 'error'); return; }
+  const m = MATERIALES.find(x=>x.codigo===String(codigo));
+  if(!m){ toast('Material no encontrado en el catálogo', 'error'); return; }
+  const ya = crearState.materiales.find(x=>x.codigo===m.codigo);
+  if(ya) ya.cantidad = +(ya.cantidad + cant).toFixed(3);   // si ya estaba, se suma
+  else crearState.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, stock:m.stock});
   paintMaterialesForm();
   cerrarMaterialForm();
 }
@@ -984,15 +1208,19 @@ function construirOTMDesdeFormulario(){
     actividadTipo = document.getElementById('f_actividad_libre_tipo').value;
     esActividadLibre = true;
     if(!actividadNombre){ toast('Escribe el nombre de la nueva actividad', 'error'); return null; }
-    if(!ACTIVIDADES[crearState.equipoDni]) ACTIVIDADES[crearState.equipoDni] = [];
-    ACTIVIDADES[crearState.equipoDni].push({a:actividadNombre, tipo:actividadTipo});
-    apiPost('nueva_actividad', {dni:crearState.equipoDni, actividad:actividadNombre, tipo:actividadTipo})
-      .catch(err=>{ console.error(err); toast('No se pudo guardar la nueva actividad en el Sheet: '+err.message, 'error'); });
+    // (la actividad se guarda en el Sheet recién cuando la OTM pasa todas las validaciones)
   } else {
     actividadNombre = crearState.actividadNombre;
     actividadTipo = crearState.actividadTipo;
     if(!actividadNombre){ toast('Selecciona una actividad o usa texto libre', 'error'); return null; }
   }
+
+  const prioridad = document.getElementById('f_prioridad').value;
+  const responsable = document.getElementById('f_responsable').value;
+  if(!prioridad){ toast('Selecciona la prioridad', 'error'); return null; }
+  if(!responsable){ toast('Selecciona el supervisor responsable', 'error'); return null; }
+  const fechaTxt = document.getElementById('f_fecha').value;
+  if(!fechaTxt){ toast('Indica la fecha de la OTM', 'error'); return null; }
 
   if(crearState.externoActivo){
     const cantExt = parseInt(document.getElementById('f_cant_externos').value)||0;
@@ -1002,43 +1230,61 @@ function construirOTMDesdeFormulario(){
   const internos = crearState.selectedTecnicos.length;
   const externos = crearState.externoActivo ? Math.max(1, parseInt(document.getElementById('f_cant_externos').value)||0) : 0;
   const participantes = internos + externos;
-  const fecha = new Date(document.getElementById('f_fecha').value);
+  const fecha = fechaDesdeInput(fechaTxt);
 
   return {
-    id: `OTM-${Date.now().toString().slice(-6)}-${OTMS.length+1}`,
+    id: `OTM-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*90+10)}`,
     fecha,
     equipo: equipo.nombre,
     dni: equipo.dni,
     actividad: actividadNombre,
     esActividadLibre,
     tipoMtto: actividadTipo,
-    prioridad: document.getElementById('f_prioridad').value,
-    responsable: document.getElementById('f_responsable').value,
+    prioridad, responsable,
     estado: 'Pendiente',
     internos, externos, participantes,
     empresaContratista: null,
-    componente: document.getElementById('f_componente').value || '—',
-    sintoma: document.getElementById('f_sintoma').value || '—',
-    causa: document.getElementById('f_causa').value || '—',
-    medida: document.getElementById('f_medida').value || '—',
+    componente: document.getElementById('f_componente').value.trim(),
+    sintoma: document.getElementById('f_sintoma').value.trim(),
+    causa: document.getElementById('f_causa').value.trim(),
+    medida: document.getElementById('f_medida').value.trim(),
     actividadRealizada: '',
-    comentarios: '—',
+    comentarios: '',
     comentarioCierre: '',
     jornalesEjecutados: null, horasEjecutadas: null, hh: 0,
     personalAsignado: [...crearState.selectedTecnicos],
     materiales: crearState.materiales.map(m=>({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:m.cantidad})),
-    historial: [{estado:'Pendiente', fecha}],
+    historial: [{estado:'Pendiente', fecha:new Date()}],   // hora real de registro
   };
+}
+
+/* Guarda la OTM nueva ESPERANDO la confirmación del Sheet (evita duplicados por doble clic) */
+let guardandoOTM = false;
+function setGuardando(v){
+  guardandoOTM = v;
+  document.querySelectorAll('[data-guardar]').forEach(b=>{ b.disabled = v; b.classList.toggle('opacity-60', v); });
+}
+async function guardarNuevaOTM(nueva){
+  if(nueva.esActividadLibre){
+    await apiPost('nueva_actividad', {dni:nueva.dni, actividad:nueva.actividad, tipo:nueva.tipoMtto});
+    const k = String(nueva.dni);
+    if(!ACTIVIDADES[k]) ACTIVIDADES[k] = [];
+    if(!ACTIVIDADES[k].some(a=>norm(a.a)===norm(nueva.actividad))) ACTIVIDADES[k].push({a:nueva.actividad, tipo:nueva.tipoMtto});
+  }
+  await apiPost('upsert_otm', {otm:nueva});
+  OTMS.unshift(nueva);
 }
 
 function submitOTM(e){
   e.preventDefault();
+  if(guardandoOTM) return false;
   const nueva = construirOTMDesdeFormulario();
   if(!nueva) return false;
-  OTMS.unshift(nueva);
-  syncOTM(nueva);
-  toast(`OTM ${nueva.id} registrada en estado Pendiente`);
-  navigate('gestion');
+  setGuardando(true);
+  guardarNuevaOTM(nueva)
+    .then(()=>{ toast(`OTM ${nueva.id} registrada en estado Pendiente`); navigate('gestion'); })
+    .catch(err=> toast('No se pudo registrar la OTM: '+err.message, 'error'))
+    .finally(()=> setGuardando(false));
   return false;
 }
 
@@ -1063,14 +1309,21 @@ function mensajeWhatsAppOTM(o){
   return lineas.join('\n');
 }
 function registrarYCompartirWhatsApp(){
+  if(guardandoOTM) return;
   const nueva = construirOTMDesdeFormulario();
   if(!nueva) return;
-  OTMS.unshift(nueva);
-  syncOTM(nueva);
-  toast(`OTM ${nueva.id} registrada en estado Pendiente`);
-  const url = `https://wa.me/?text=${encodeURIComponent(mensajeWhatsAppOTM(nueva))}`;
-  window.open(url, '_blank');
-  navigate('gestion');
+  // La ventana se abre YA (dentro del clic) para que el navegador no la bloquee
+  const win = window.open('', '_blank');
+  setGuardando(true);
+  guardarNuevaOTM(nueva)
+    .then(()=>{
+      toast(`OTM ${nueva.id} registrada en estado Pendiente`);
+      const url = `https://wa.me/?text=${encodeURIComponent(mensajeWhatsAppOTM(nueva))}`;
+      if(win) win.location.href = url; else window.location.href = url;
+      navigate('gestion');
+    })
+    .catch(err=>{ if(win) win.close(); toast('No se pudo registrar la OTM: '+err.message, 'error'); })
+    .finally(()=> setGuardando(false));
 }
 function iconWhatsapp(){
   return `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.29-1.39a9.9 9.9 0 004.75 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0012.04 2zm0 18.13h-.01a8.2 8.2 0 01-4.18-1.14l-.3-.18-3.14.82.84-3.06-.2-.31a8.2 8.2 0 01-1.26-4.35c0-4.54 3.7-8.24 8.26-8.24 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 012.42 5.83c0 4.55-3.7 8.24-8.26 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.17.24-.64.8-.78.97-.14.17-.29.19-.53.06-.25-.12-1.04-.38-1.99-1.22-.73-.66-1.23-1.46-1.37-1.71-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.16-.25.24-.42.08-.17.04-.31-.02-.44-.06-.12-.56-1.36-.77-1.86-.2-.48-.4-.42-.56-.42-.14-.01-.31-.01-.48-.01-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.08 0 1.23.9 2.42 1.02 2.58.12.17 1.77 2.7 4.29 3.79.6.26 1.06.41 1.43.53.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.1-.23-.16-.48-.28z"/></svg>`;
@@ -1105,7 +1358,7 @@ function renderGestion(){
     <div class="p-4 lg:p-5 pb-3 flex flex-col sm:flex-row gap-3 sm:items-center">
       <div class="relative flex-1">
         <svg class="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/></svg>
-        <input id="filt_q" oninput="onQueryInput()" value="${gestionQuery}" type="text" placeholder="Buscar por equipo o responsable…" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
+        <input id="filt_q" oninput="onQueryInput()" value="${esc(gestionQuery)}" type="text" placeholder="Buscar por equipo, actividad, responsable u OTM…" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
       </div>
       <div class="flex items-center gap-2">
         <label class="text-xs font-medium text-ink-500 whitespace-nowrap hidden sm:inline">Fecha:</label>
@@ -1124,15 +1377,15 @@ function renderGestion(){
     <div id="filtrosPanel" class="hidden px-4 lg:px-5 pb-4 grid grid-cols-2 lg:grid-cols-4 gap-3 border-b border-ink-100">
       <select id="filt_estado" onchange="onFiltroChange()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs">
         <option value="">Todos los estados</option>
-        ${ESTADOS.map(s=>`<option value="${s}">${s}</option>`).join('')}
+        ${ESTADOS.map(s=>`<option value="${s}" ${gestionFiltros.estado===s?'selected':''}>${s}</option>`).join('')}
       </select>
       <select id="filt_prioridad" onchange="onFiltroChange()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs">
         <option value="">Todas las prioridades</option>
-        ${PRIORIDADES.map(p=>`<option value="${p}">${p}</option>`).join('')}
+        ${PRIORIDADES.map(p=>`<option value="${p}" ${gestionFiltros.prioridad===p?'selected':''}>${p}</option>`).join('')}
       </select>
       <select id="filt_responsable" onchange="onFiltroChange()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs">
         <option value="">Todos los responsables</option>
-        ${RESPONSABLES.map(r=>`<option value="${r}">${r}</option>`).join('')}
+        ${RESPONSABLES.map(r=>`<option value="${esc(r)}" ${gestionFiltros.responsable===r?'selected':''}>${esc(r)}</option>`).join('')}
       </select>
       <button onclick="resetFiltros()" class="border border-ink-200 rounded-lg px-2.5 py-2 text-xs font-medium text-ink-600 hover:bg-ink-50">Limpiar filtros</button>
     </div>
@@ -1159,7 +1412,7 @@ function resetFiltros(){
 function filteredOTMs(){
   return OTMS.filter(o=>{
     if(gestionFecha && isoDate(o.fecha)!==gestionFecha) return false;
-    if(gestionQuery && !(o.equipo.toLowerCase().includes(gestionQuery) || o.responsable.toLowerCase().includes(gestionQuery) || o.id.toLowerCase().includes(gestionQuery) || o.actividad.toLowerCase().includes(gestionQuery))) return false;
+    if(gestionQuery && !coincide(norm(`${o.id} ${o.equipo} ${o.responsable} ${o.actividad}`), tokens(gestionQuery))) return false;
     if(gestionFiltros.estado && o.estado!==gestionFiltros.estado) return false;
     if(gestionFiltros.prioridad && o.prioridad!==gestionFiltros.prioridad) return false;
     if(gestionFiltros.responsable && o.responsable!==gestionFiltros.responsable) return false;
@@ -1215,6 +1468,9 @@ function paintGestionCards(){
             <button onclick="openOTM('${o.id}','estado')" title="Cambiar estado" class="p-1.5 rounded-md hover:bg-ink-100 text-ink-500">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
             </button>
+            ${o.estado!=='Completada' ? `<button onclick="openEliminarModal('${o.id}')" title="Eliminar OTM" class="p-1.5 rounded-md hover:bg-red-50 text-ink-500 hover:text-red-600">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+            </button>` : ''}
           </div>
         </div>
       </div>
@@ -1290,12 +1546,12 @@ function openVerModal(o){
               <p class="text-xs text-ink-400 mb-2">Participantes: <span class="font-medium text-ink-700">${o.participantes}</span> (${o.internos} internos / ${o.externos} externos)</p>
               <p class="text-xs font-medium text-ink-500 mb-1.5">Técnicos internos</p>
               <div class="flex flex-wrap gap-1.5 mb-2">
-                ${o.personalAsignado.length? o.personalAsignado.map(n=>`<span class="chip px-2.5 py-1 rounded-full text-xs bg-ink-100 text-ink-600">${n} <button onclick="removeTecnicoFromOTM('${o.id}','${n}')" class="text-ink-400 hover:text-red-600">✕</button></span>`).join('') : '<span class="text-xs text-ink-400">Sin técnicos internos asignados.</span>'}
+                ${o.personalAsignado.length? o.personalAsignado.map(n=>`<span class="chip px-2.5 py-1 rounded-full text-xs bg-ink-100 text-ink-600">${esc(n)} <button onclick="removeTecnicoFromOTM('${o.id}','${jsq(n)}')" class="text-ink-400 hover:text-red-600">✕</button></span>`).join('') : '<span class="text-xs text-ink-400">Sin técnicos internos asignados.</span>'}
               </div>
               <div class="flex gap-2 mb-4">
                 <select id="addTecnicoSel_${o.id}" class="flex-1 border border-ink-200 rounded-lg px-2.5 py-1.5 text-xs">
                   <option value="">Añadir técnico…</option>
-                  ${TECNICOS.filter(t=>!o.personalAsignado.includes(t)).map(t=>`<option value="${t}">${t}</option>`).join('')}
+                  ${TECNICOS.filter(t=>!o.personalAsignado.includes(t)).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}
                 </select>
                 <button onclick="addTecnicoToOTM('${o.id}')" class="px-3 py-1.5 rounded-lg bg-ink-800 hover:bg-ink-900 text-white text-xs font-medium">+ Añadir</button>
               </div>
@@ -1331,7 +1587,7 @@ function openVerModal(o){
               </div>
               <div class="bg-violet-50 rounded-lg p-3 text-center mb-3">
                 <p class="text-[11px] text-violet-600 font-medium uppercase tracking-wide">Horas Hombre (jornales × horas)</p>
-                <p id="ejec_hh_${o.id}" class="text-xl font-bold text-violet-700 mt-0.5">${(o.hh||0).toFixed ? o.hh.toFixed(1) : o.hh}</p>
+                <p id="ejec_hh_${o.id}" class="text-xl font-bold text-violet-700 mt-0.5">${(Number(o.hh)||0).toFixed(1)}</p>
               </div>
               <label class="block text-xs font-medium text-ink-500 mb-1">Comentario final de cierre</label>
               <textarea id="ejec_comentario_${o.id}" rows="3" placeholder="Resumen de lo ejecutado, observaciones y conformidad" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm mb-3">${o.comentarioCierre||''}</textarea>
@@ -1342,7 +1598,7 @@ function openVerModal(o){
                 ${o.historial.map(h=>`
                   <div class="flex items-center gap-2 text-xs">
                     <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
-                    <span class="text-ink-400 whitespace-nowrap">${h.fecha.toLocaleString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                    <span class="text-ink-400 whitespace-nowrap">${fmtDateTime(h.fecha)}</span>
                     <span class="text-ink-700 font-medium">→ ${h.estado}</span>
                   </div>`).join('')}
               </div>
@@ -1441,24 +1697,24 @@ function openEditarModal(o){
             <div>
               <label class="block text-xs font-medium text-ink-500 mb-1">Responsable</label>
               <select id="edit_responsable" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-                ${RESPONSABLES.map(r=>`<option value="${r}" ${r===o.responsable?'selected':''}>${r}</option>`).join('')}
+                ${RESPONSABLES.map(r=>`<option value="${esc(r)}" ${r===o.responsable?'selected':''}>${esc(r)}</option>`).join('')}
               </select>
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-medium text-ink-500 mb-1">Componente afectado</label>
-              <input id="edit_componente" type="text" value="${o.componente}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <input id="edit_componente" type="text" value="${esc(o.componente==='—'?'':o.componente)}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-medium text-ink-500 mb-1">Síntoma de avería</label>
-              <input id="edit_sintoma" type="text" value="${o.sintoma}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <input id="edit_sintoma" type="text" value="${esc(o.sintoma==='—'?'':o.sintoma)}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-medium text-ink-500 mb-1">Causa de avería</label>
-              <input id="edit_causa" type="text" value="${o.causa}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <input id="edit_causa" type="text" value="${esc(o.causa==='—'?'':o.causa)}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-medium text-ink-500 mb-1">Medida a tomar</label>
-              <input id="edit_medida" type="text" value="${o.medida}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <input id="edit_medida" type="text" value="${esc(o.medida==='—'?'':o.medida)}" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
             </div>
             <div class="sm:col-span-2">
               <label class="block text-xs font-medium text-ink-500 mb-1">Actividad realizada</label>
@@ -1526,6 +1782,7 @@ function openEstadoModal(o){
             ${next.map(e=>`<option value="${e}">${e}</option>`).join('')}
           </select>
           <p class="text-[11px] text-ink-400 mt-2">Solo se muestran las transiciones válidas según el flujo de la OTM.</p>
+          ${next.includes('Completada') && !(o.horasEjecutadas>0) ? `<p class="text-[11px] text-amber-600 mt-2">⚠ Esta OTM aún no tiene jornales ni horas registrados (Ver → "Ejecución y cierre"). Puedes completarla igual, pero no sumará Horas Hombre.</p>` : ''}
         </div>
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
           <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
@@ -1538,17 +1795,62 @@ function openEstadoModal(o){
 function confirmarCambioEstado(id){
   const o = OTMS.find(x=>x.id===id);
   const nuevo = document.getElementById('nuevoEstado').value;
+  const sinHoras = nuevo==='Completada' && !(o.horasEjecutadas>0);
   o.estado = nuevo;
   o.historial.push({estado:nuevo, fecha:new Date()});
-  if(nuevo==='Completada' && !o.actividadRealizada){
-    o.actividadRealizada = 'Trabajo ejecutado conforme a lo programado. Verificación funcional satisfactoria.';
-  }
+  // (antes se escribía un texto automático de "Actividad realizada" que no reflejaba lo real)
   syncOTM(o);
   closeModal();
   paintGestionCards();
   toast(`OTM ${id} cambió a estado "${nuevo}"`);
+  if(sinHoras) setTimeout(()=>toast('Aviso: la OTM se completó sin jornales/horas registrados. Puedes cargarlos en Ver → "Ejecución y cierre".', 'info'), 400);
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+/* ---- Eliminar OTM (solo si NO está Completada) ---- */
+function openEliminarModal(id){
+  const o = OTMS.find(x=>x.id===id);
+  if(!o) return;
+  if(o.estado==='Completada'){ toast('Una OTM Completada no se puede eliminar', 'error'); return; }
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-md">
+        <div class="px-5 py-4 border-b border-ink-100">
+          <h3 class="font-semibold text-red-700">Eliminar OTM</h3>
+          <p class="text-xs text-ink-400">${o.id} · ${esc(o.equipo)}</p>
+        </div>
+        <div class="px-5 py-5 text-sm text-ink-600 space-y-2">
+          <p>¿Seguro que deseas eliminar la OTM <strong>${o.id}</strong> — ${esc(o.actividad)}?</p>
+          <p class="text-xs text-red-600">Se borrará del Sheet junto con su personal, materiales e historial. Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
+          <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
+          <button id="btnConfirmEliminar" onclick="confirmarEliminarOTM('${o.id}')" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium">Eliminar</button>
+        </div>
+      </div>
+    </div>`;
+}
+async function confirmarEliminarOTM(id){
+  const btn = document.getElementById('btnConfirmEliminar');
+  if(btn){ btn.disabled = true; btn.textContent = 'Eliminando…'; }
+  try{
+    await apiPost('eliminar_otm', {id});
+    OTMS = OTMS.filter(x=>x.id!==id);
+    closeModal();
+    paintGestionCards();
+    toast(`OTM ${id} eliminada`);
+  }catch(err){
+    toast('No se pudo eliminar: '+err.message, 'error');
+    if(btn){ btn.disabled = false; btn.textContent = 'Eliminar'; }
+  }
+}
+
+/* Agrega (o suma) un material a una OTM */
+function sumarMaterialAOTM(o, m, cant){
+  const ya = o.materiales.find(x=>String(x.codigo)===m.codigo);
+  if(ya) ya.cantidad = +(Number(ya.cantidad) + cant).toFixed(3);
+  else o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+}
 
 /* ---- Agregar material directo a una OTM (desde tarjeta) ---- */
 function openAgregarMaterialOTM(otmId){
@@ -1569,7 +1871,7 @@ function openAgregarMaterialOTM(otmId){
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad</label>
-            <input type="number" id="qmat_cant" min="1" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <input type="number" id="qmat_cant" min="0.01" step="any" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
             <p id="qmat_stockinfo" class="text-[11px] text-ink-400 mt-1"></p>
           </div>
         </div>
@@ -1582,22 +1884,26 @@ function openAgregarMaterialOTM(otmId){
   `;
   wireAutocomplete({
     inputId:'ac_input_qmaterial', listId:'ac_list_qmaterial',
-    itemsProvider: ()=> MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad})`})),
+    itemsProvider: ()=> MATERIALES_CARGADOS ? MAT_ITEMS : null,
     onPick: (codigo)=>{
       document.getElementById('qmat_codigo').value = codigo;
-      const m = MATERIALES.find(x=>x.codigo===codigo);
+      const m = MATERIALES.find(x=>x.codigo===String(codigo));
+      if(!m) return;
       document.getElementById('qmat_stockinfo').innerHTML = `Stock disponible: ${m.stock} ${m.unidad}${m.stock<m.min?' · <span class="text-amber-600 font-medium">stock bajo</span>':''}`;
     },
     emptyText:'No se encontró el material'
   });
+  cargarMaterialesEnSegundoPlano(30000);
 }
 function confirmarAgregarMaterialOTM(otmId){
   const codigo = document.getElementById('qmat_codigo').value;
-  const cant = parseInt(document.getElementById('qmat_cant').value)||1;
+  const cant = parseFloat(document.getElementById('qmat_cant').value);
   if(!codigo){ toast('Selecciona un material de la lista', 'error'); return; }
-  const m = MATERIALES.find(x=>x.codigo===codigo);
+  if(!(cant > 0)){ toast('La cantidad debe ser mayor a 0', 'error'); return; }
+  const m = MATERIALES.find(x=>x.codigo===String(codigo));
+  if(!m){ toast('Material no encontrado en el catálogo', 'error'); return; }
   const o = OTMS.find(x=>x.id===otmId);
-  o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  sumarMaterialAOTM(o, m, cant);
   syncOTM(o);
   if(cant > m.stock){
     toast(`Se registró la necesidad de ${cant} ${m.unidad}. Stock disponible: ${m.stock} — considera pasar la OTM a "Esperando material".`, 'error');
@@ -1611,22 +1917,34 @@ function confirmarAgregarMaterialOTM(otmId){
 /* =========================================================
    MATERIALES (catálogo)
    ========================================================= */
+const MAT_PAGE = 100;          // filas por página: pintar 14 000 filas de golpe congelaba la pestaña
+let matLista = [];             // resultado de la búsqueda actual
+let matMostrados = MAT_PAGE;
+let matTimer = null;
+
 function renderMateriales(){
+  const bajo = MATERIALES.filter(m=>m.stock>0 && m.stock<m.min).length;
+  const sin = MATERIALES.filter(m=>m.stock===0).length;
   document.getElementById('view-materiales').innerHTML = `
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 mb-4">
-    ${kpiCard('Total materiales', MATERIALES.length, 'ítems en catálogo', 'brand', iconClip())}
-    ${kpiCard('Stock bajo', MATERIALES.filter(m=>m.stock>0 && m.stock<m.min).length, 'requieren reposición', 'amber', iconClock())}
-    ${kpiCard('Sin stock', MATERIALES.filter(m=>m.stock===0).length, 'ítems agotados', 'ink', iconPause())}
+    ${kpiCard('Total materiales', MATERIALES_CARGADOS ? MATERIALES.length : '…', 'ítems en catálogo', 'brand', iconClip())}
+    ${kpiCard('Stock bajo', MATERIALES_CARGADOS ? bajo : '…', 'requieren reposición', 'amber', iconClock())}
+    ${kpiCard('Sin stock', MATERIALES_CARGADOS ? sin : '…', 'ítems agotados', 'ink', iconPause())}
   </div>
 
   <div class="bg-white rounded-xl shadow-card border border-ink-100 overflow-hidden">
     <div class="px-4 lg:px-5 py-3 border-b border-ink-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-      <div class="relative w-full sm:w-80">
+      <div class="relative w-full sm:w-96">
         <svg class="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 114 10.5a6.5 6.5 0 0113 0z"/></svg>
-        <input id="matSearch" oninput="filterMateriales()" type="text" placeholder="Buscar por código o descripción…" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
+        <input id="matSearch" oninput="onMatSearch()" type="text" placeholder="Ej.: codo pvc 2  ·  palabras en cualquier orden" class="w-full border border-ink-200 rounded-lg pl-9 pr-3 py-2 text-sm">
       </div>
-      <p class="text-xs text-ink-400"><span id="matCount" class="font-medium text-ink-700">${MATERIALES.length}</span> materiales</p>
+      <div class="flex items-center gap-3">
+        <span id="matStockInfo" class="text-[11px] text-ink-400">${matCargando ? 'Actualizando stock…' : horaStock()}</span>
+        <button onclick="cargarMaterialesEnSegundoPlano()" title="Actualizar stock" class="text-xs font-medium text-brand-600 hover:text-brand-700">↻ Actualizar</button>
+        <p class="text-xs text-ink-400"><span id="matCount" class="font-medium text-ink-700">${MATERIALES.length}</span> materiales</p>
+      </div>
     </div>
+    ${MATERIALES_CARGADOS ? '' : `<div class="px-5 py-3 text-xs text-ink-400">Cargando catálogo de materiales…</div>`}
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
@@ -1642,78 +1960,139 @@ function renderMateriales(){
         <tbody id="matBody"></tbody>
       </table>
     </div>
+    <div id="matMore" class="px-5 py-3 text-center"></div>
   </div>
   `;
-  paintMateriales(MATERIALES);
+  matLista = MATERIALES; matMostrados = MAT_PAGE;
+  paintMateriales();
 }
-function paintMateriales(list){
+function paintMateriales(){
   const body = document.getElementById('matBody');
-  document.getElementById('matCount').textContent = list.length;
-  if(list.length===0){
-    body.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-ink-400 text-sm">No se encontraron materiales.</td></tr>`;
+  if(!body) return;
+  document.getElementById('matCount').textContent = matLista.length;
+  const more = document.getElementById('matMore');
+  if(matLista.length===0){
+    body.innerHTML = MATERIALES_CARGADOS ? `<tr><td colspan="6" class="text-center py-10 text-ink-400 text-sm">No se encontraron materiales.</td></tr>` : '';
+    more.innerHTML = '';
     return;
   }
-  body.innerHTML = list.map(m=>{
+  body.innerHTML = matLista.slice(0, matMostrados).map(m=>{
     let estado, cls;
     if(m.stock===0){ estado='Agotado'; cls='bg-red-50 text-red-700 ring-1 ring-red-200'; }
     else if(m.stock<m.min){ estado='Stock bajo'; cls='bg-amber-50 text-amber-700 ring-1 ring-amber-200'; }
     else { estado='Disponible'; cls='bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'; }
     return `
     <tr class="border-b border-ink-50 hover:bg-ink-50/60">
-      <td class="py-2.5 px-4 font-medium text-ink-800 whitespace-nowrap">${m.codigo}</td>
-      <td class="py-2.5 px-4 text-ink-600">${m.desc}</td>
-      <td class="py-2.5 px-4 text-ink-500">${m.unidad}</td>
+      <td class="py-2.5 px-4 font-medium text-ink-800 whitespace-nowrap">${esc(m.codigo)}</td>
+      <td class="py-2.5 px-4 text-ink-600">${esc(m.desc)}</td>
+      <td class="py-2.5 px-4 text-ink-500">${esc(m.unidad)}</td>
       <td class="py-2.5 px-4 text-ink-800 font-medium">${m.stock}</td>
       <td class="py-2.5 px-4"><span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${cls}">${estado}</span></td>
       <td class="py-2.5 px-4 text-right">
-        <button onclick="openAsociarMaterial('${m.codigo}')" class="text-xs font-medium text-brand-600 hover:text-brand-700">+ Asociar a OTM</button>
+        <button onclick="openAsociarMaterial('${jsq(m.codigo)}')" class="text-xs font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap">+ Asociar a OTM</button>
       </td>
     </tr>`;
   }).join('');
+  const resto = matLista.length - matMostrados;
+  more.innerHTML = resto > 0
+    ? `<button onclick="matVerMas()" class="px-4 py-2 rounded-lg border border-ink-200 text-xs font-medium text-ink-600 hover:bg-ink-50">Mostrar ${Math.min(resto, MAT_PAGE)} más (quedan ${resto})</button>`
+    : '';
 }
+function matVerMas(){ matMostrados += MAT_PAGE; paintMateriales(); }
+function onMatSearch(){
+  clearTimeout(matTimer);
+  matTimer = setTimeout(filterMateriales, 200);   // espera a que el usuario deje de escribir
+}
+/* Busca por código o descripción; las palabras pueden ir en cualquier orden y sin tildes.
+   "pvc codo 2" encuentra "CODO PVC 2\" x 90°" */
 function filterMateriales(){
-  const q = document.getElementById('matSearch').value.toLowerCase().trim();
-  const list = MATERIALES.filter(m => m.desc.toLowerCase().includes(q) || m.codigo.toLowerCase().includes(q));
-  paintMateriales(list);
+  const toks = tokens(document.getElementById('matSearch').value);
+  matLista = toks.length ? MATERIALES.filter(m => coincide(m._q, toks)) : MATERIALES;
+  matMostrados = MAT_PAGE;
+  paintMateriales();
+}
+
+/* ---- Asociar material a OTM, con filtro por las 3 últimas semanas ---- */
+let asocSemanas = new Set();   // lunes (ISO) de las semanas seleccionadas; vacío = todas
+let asocCodigo = null;
+
+function otmsAbiertasFiltradas(){
+  const abiertas = OTMS.filter(o=>!ESTADOS_TERMINALES.includes(o.estado));
+  if(asocSemanas.size===0) return abiertas;
+  const rangos = [...asocSemanas].map(ini=>[ini, addDaysISO(ini, 6)]);
+  return abiertas.filter(o=>{ const f = isoDate(o.fecha); return rangos.some(([a,b])=> f>=a && f<=b); });
+}
+function toggleSemanaAsoc(ini){
+  asocSemanas.has(ini) ? asocSemanas.delete(ini) : asocSemanas.add(ini);
+  paintAsocFiltro();
+}
+function limpiarSemanasAsoc(){ asocSemanas.clear(); paintAsocFiltro(); }
+function paintAsocFiltro(){
+  const wrap = document.getElementById('asoc_semanas');
+  const sel = document.getElementById('asoc_otm');
+  if(!wrap || !sel) return;
+  wrap.innerHTML = ultimasSemanas(3).map(w=>{
+    const on = asocSemanas.has(w.ini);
+    return `<button type="button" onclick="toggleSemanaAsoc('${w.ini}')"
+      class="px-2.5 py-1.5 rounded-lg text-xs font-medium border ${on?'bg-brand-600 text-white border-brand-600':'border-ink-200 text-ink-600 hover:bg-ink-50'}">
+      ${w.label}<span class="block text-[10px] font-normal ${on?'text-white/80':'text-ink-400'}">Sem ${w.num} · ${ddmm(w.ini)}–${ddmm(w.fin)}</span></button>`;
+  }).join('') + `<button type="button" onclick="limpiarSemanasAsoc()" class="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-dashed border-ink-300 text-ink-500 hover:text-red-600 hover:border-red-300">Limpiar filtro</button>`;
+  const lista = otmsAbiertasFiltradas();
+  sel.innerHTML = lista.length
+    ? lista.map(o=>`<option value="${o.id}">${fmtDate(o.fecha)} · ${o.id} · ${esc(o.equipo)} — ${esc(o.actividad)}</option>`).join('')
+    : `<option value="">No hay OTM abiertas en la(s) semana(s) seleccionada(s)</option>`;
+  document.getElementById('asoc_total').textContent = `${lista.length} OTM abiertas${asocSemanas.size?' en el filtro':''}`;
 }
 function openAsociarMaterial(codigo){
-  const m = MATERIALES.find(x=>x.codigo===codigo);
+  const m = MATERIALES.find(x=>x.codigo===String(codigo));
+  if(!m) return;
   const abiertas = OTMS.filter(o=>!ESTADOS_TERMINALES.includes(o.estado));
   if(abiertas.length===0){ toast('No hay OTM abiertas para asociar materiales', 'error'); return; }
+  asocCodigo = m.codigo;
   document.getElementById('modalRoot').innerHTML = `
     <div class="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
-      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-md">
+      <div class="modal-panel bg-white rounded-xl shadow-pop w-full max-w-lg">
         <div class="px-5 py-4 border-b border-ink-100">
           <h3 class="font-semibold text-ink-900">Asociar material a OTM</h3>
-          <p class="text-xs text-ink-400">${m.codigo} · ${m.desc}</p>
+          <p class="text-xs text-ink-400">${esc(m.codigo)} · ${esc(m.desc)}</p>
         </div>
         <div class="px-5 py-5 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-ink-700 mb-1.5">OTM destino</label>
-            <select id="asoc_otm" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-              ${abiertas.map(o=>`<option value="${o.id}">${o.id} · ${o.equipo}</option>`).join('')}
-            </select>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">Filtrar OTM por semana</label>
+            <div id="asoc_semanas" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between mb-1.5">
+              <label class="block text-sm font-medium text-ink-700">OTM destino</label>
+              <span id="asoc_total" class="text-[11px] text-ink-400"></span>
+            </div>
+            <select id="asoc_otm" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm"></select>
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad</label>
-            <input type="number" id="asoc_cant" min="1" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-            <p class="text-[11px] text-ink-400 mt-1">Stock disponible: ${m.stock} ${m.unidad}${m.stock < m.min ? ' · <span class="text-amber-600 font-medium">stock bajo</span>':''}</p>
+            <input type="number" id="asoc_cant" min="0.01" step="any" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <p id="asoc_stockinfo" class="text-[11px] text-ink-400 mt-1">Stock disponible: ${m.stock} ${esc(m.unidad)}${m.stock < m.min ? ' · <span class="text-amber-600 font-medium">stock bajo</span>':''}</p>
           </div>
         </div>
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
           <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-ink-200 text-sm font-medium text-ink-600 hover:bg-ink-50">Cancelar</button>
-          <button onclick="confirmarAsociarMaterial('${codigo}')" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar a la OTM</button>
+          <button onclick="confirmarAsociarMaterial()" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium">Agregar a la OTM</button>
         </div>
       </div>
     </div>
   `;
+  paintAsocFiltro();
+  cargarMaterialesEnSegundoPlano(30000);   // confirma el stock actual mientras eliges la OTM
 }
-function confirmarAsociarMaterial(codigo){
-  const m = MATERIALES.find(x=>x.codigo===codigo);
+function confirmarAsociarMaterial(){
+  const m = MATERIALES.find(x=>x.codigo===asocCodigo);
   const otmId = document.getElementById('asoc_otm').value;
-  const cant = parseInt(document.getElementById('asoc_cant').value)||1;
+  const cant = parseFloat(document.getElementById('asoc_cant').value);
+  if(!otmId){ toast('Selecciona una OTM destino', 'error'); return; }
+  if(!(cant > 0)){ toast('La cantidad debe ser mayor a 0', 'error'); return; }
   const o = OTMS.find(x=>x.id===otmId);
-  o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  if(!o || !m) return;
+  sumarMaterialAOTM(o, m, cant);
   syncOTM(o);
   if(cant > m.stock){
     toast(`Se registró la necesidad de ${cant} ${m.unidad}. Stock disponible: ${m.stock} — se recomienda pasar la OTM a "Esperando material".`, 'error');
@@ -1722,6 +2101,7 @@ function confirmarAsociarMaterial(codigo){
   }
   closeModal();
 }
+
 
 /* Init */
 initApp();
