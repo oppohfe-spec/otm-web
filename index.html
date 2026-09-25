@@ -186,7 +186,7 @@
 /* =========================================================
    CONEXIÓN A GOOGLE SHEETS (Apps Script Web App)
    ========================================================= */
-const APP_VERSION = '2.4';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
+const APP_VERSION = '2.5';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
 const CONFIG = {
   // Pegar acá la URL que entrega Apps Script al publicar ("Implementar > Nueva implementación > Aplicación web")
   API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
@@ -1329,7 +1329,7 @@ function mensajeReenvioOTM(o){
     `🏷️ *Tipo:* ${TIPO_MTTO_LABEL[o.tipoMtto]||''} (${TIPO_ORDEN_SAP[o.tipoMtto]||''})`,
     `🚦 *Prioridad:* ${o.prioridad}`,
     `📌 *Estado:* ${o.estado}`,
-    `📅 *Fecha:* ${fmtDateTime(o.fecha)}`,
+    `📅 *Fecha:* ${fmtDate(o.fecha)}`,
   );
   const diag = [o.componente, o.sintoma].filter(x=>x && x!=='—').join(' — ');
   if(diag) l.push(`🔍 *Diagnóstico:* ${diag}`);
@@ -1362,7 +1362,7 @@ function registrarMatNuevo(otmId, m, cant){
   guardarMatNuevos();
 }
 function mensajeMaterialesNuevos(o, lista){
-  const l = [`📦 *Materiales añadidos a OTM*`, ...cabeceraOTM(o), `📅 *Fecha:* ${fmtDateTime(new Date())}`, `🧾 *Materiales añadidos:*`];
+  const l = [`📦 *Materiales añadidos a OTM*`, ...cabeceraOTM(o), `📅 *Fecha:* ${fmtDate(new Date())}`, `🧾 *Materiales añadidos:*`];
   lista.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`));
   return l.join('\n');
 }
@@ -1553,7 +1553,7 @@ function paintGestionCards(){
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-ink-100 text-xs">
           ${badgeEstado(o.estado)}
           <span class="text-ink-500">Responsable: <span class="font-medium text-ink-700">${o.responsable}</span></span>
-          <span class="text-ink-500">Fecha: <span class="font-medium text-ink-700">${fmtDateTime(o.fecha)}</span></span>
+          <span class="text-ink-500">Fecha: <span class="font-medium text-ink-700">${fmtDate(o.fecha)}</span></span>
           ${esConFuga(o) ? `<span class="text-amber-600 font-medium">⚠ Con fuga</span>` : ''}
           ${o.materiales.length ? `<span class="text-ink-500">${o.materiales.length} material(es)</span>` : ''}
           ${o.personalAsignado.length ? `<span class="text-ink-500">${o.personalAsignado.length} técnico(s)</span>` : `<span class="text-amber-600">Sin personal asignado</span>`}
@@ -1627,7 +1627,7 @@ function openVerModal(o){
         <div class="px-5 pt-4">${stepFlow(o)}</div>
         <div class="px-5">
           <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm pb-4 border-b border-ink-100">
-            <div><p class="text-xs text-ink-400">Fecha</p><p class="text-ink-800 font-medium">${fmtDateTime(o.fecha)}</p></div>
+            <div><p class="text-xs text-ink-400">Fecha</p><p class="text-ink-800 font-medium">${fmtDate(o.fecha)}</p></div>
             <div><p class="text-xs text-ink-400">Estado</p>${badgeEstado(o.estado)}</div>
             <div><p class="text-xs text-ink-400">Equipo</p><p class="text-ink-800 font-medium">${o.equipo}</p></div>
             <div><p class="text-xs text-ink-400">DNI SAP</p><p class="text-ink-800 font-medium">${o.dni}</p></div>
