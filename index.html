@@ -190,7 +190,7 @@
 /* =========================================================
    CONEXIÓN A GOOGLE SHEETS (Apps Script Web App)
    ========================================================= */
-const APP_VERSION = '2.8';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
+const APP_VERSION = '2.9';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
 const CONFIG = {
   // Pegar acá la URL que entrega Apps Script al publicar ("Implementar > Nueva implementación > Aplicación web")
   API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
@@ -294,7 +294,8 @@ let ACTIVIDADES = {};
    (Preventivo y Evaluacion); por eso se distinguen por su ETIQUETA. */
 const TIPOS_BASE = [
   {label:'Preventivo',           tipo:'MP', sap:'OM03', color:'#0a6ed1', chip:'bg-brand-50 text-brand-700'},
-  {label:'Evaluacion',           tipo:'MP', sap:'OM03', color:'#06b6d4', chip:'bg-cyan-50 text-cyan-700'},
+  // soloProgramadas: solo se pueden elegir actividades ya programadas en ACTIVIDADES (sin texto libre)
+  {label:'Evaluacion',           tipo:'MP', sap:'OM03', color:'#06b6d4', chip:'bg-cyan-50 text-cyan-700', soloProgramadas:true},
   {label:'Correctivo',           tipo:'MC', sap:'OM01', color:'#f59e0b', chip:'bg-orange-50 text-orange-700'},
   {label:'Instalacion y Mejora', tipo:'IM', sap:'OM04', color:'#8b5cf6', chip:'bg-violet-50 text-violet-700'},
 ];
@@ -1225,17 +1226,28 @@ function paintChipsTipo(){
   el.innerHTML = TIPOS.map(t=>{
     const on = norm(t.label)===norm(crearState.tipoLabel);
     const n = delEquipo ? delEquipo.filter(a=> norm(tipoDe(a.tipo,a.label).label)===norm(t.label)).length : null;
+    // Evaluaciones: bloqueadas si el equipo no tiene ninguna programada
+    const bloqueado = t.soloProgramadas && !n;
+    if(bloqueado) return `<button type="button" disabled title="${crearState.equipoDni ? 'Este equipo no tiene evaluaciones programadas' : 'Elige primero el equipo'}"
+      class="px-3 py-2 rounded-lg text-sm font-medium border border-dashed border-ink-200 text-ink-300 bg-ink-50 text-left leading-tight cursor-not-allowed">
+      <span class="flex items-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>${esc(t.label)}</span>
+      <span class="block text-[10px] font-normal">${crearState.equipoDni ? 'Sin programación' : 'Elige el equipo'}</span>
+    </button>`;
     return `<button type="button" onclick="seleccionarTipo('${jsq(t.label)}')"
       class="px-3 py-2 rounded-lg text-sm font-medium border text-left leading-tight transition ${on ? 'text-white border-transparent' : 'border-ink-200 text-ink-700 hover:border-ink-300'}"
       style="${on ? `background:${t.color}` : ''}">
       <span class="flex items-center gap-1.5">${on?'':`<span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${t.color}"></span>`}${esc(t.label)}</span>
-      <span class="block text-[10px] font-normal ${on?'text-white/80':'text-ink-400'}">${t.tipo} · ${t.sap}${n!==null ? ` · ${n} act.` : ''}</span>
+      <span class="block text-[10px] font-normal ${on?'text-white/80':'text-ink-400'}">${t.tipo} · ${t.sap}${n!==null ? ` · ${n} ${t.soloProgramadas?'programada(s)':'act.'}` : ''}</span>
     </button>`;
   }).join('');
 }
+function tipoSoloProgramadas(label){ return !!(label && tipoDe('', label).soloProgramadas); }
 function seleccionarTipo(label){
-  crearState.tipoLabel = label;
   const t = tipoDe('', label);
+  if(t.soloProgramadas && !(ACTIVIDADES[crearState.equipoDni]||[]).some(a=> norm(tipoDe(a.tipo,a.label).label)===norm(t.label))){
+    toast('Este equipo no tiene evaluaciones programadas', 'error'); return;
+  }
+  crearState.tipoLabel = label;
   crearState.actividadTipo = t.tipo;
   crearState.actividadNombre = '';
   const inp = document.getElementById('ac_input_actividad');
@@ -1258,8 +1270,13 @@ function refrescarCampoActividad(){
   else if(!crearState.tipoLabel) inp.placeholder = 'Ahora elige el tipo de mantenimiento…';
   else inp.placeholder = 'Escribe para buscar la actividad…';
   const n = actividadesFiltradas().length;
-  if(cnt) cnt.innerHTML = listo ? (n ? `${n} actividad(es) de ${esc(crearState.tipoLabel)}` : `<span class="text-amber-600">Sin actividades de ${esc(crearState.tipoLabel)} → usa texto libre</span>`) : '';
-  if(listo && n===0 && !crearState.actividadLibre) toggleActividadLibre();   // abre texto libre automáticamente
+  const soloProg = tipoSoloProgramadas(crearState.tipoLabel);
+  // Evaluaciones: sin texto libre (solo las programadas)
+  const btnLibre = document.getElementById('btnActividadLibre');
+  if(btnLibre) btnLibre.classList.toggle('hidden', soloProg);
+  if(soloProg && crearState.actividadLibre) toggleActividadLibre();
+  if(cnt) cnt.innerHTML = listo ? (n ? `${n} ${soloProg ? 'evaluación(es) programada(s)' : 'actividad(es) de ' + esc(crearState.tipoLabel)}` : `<span class="text-amber-600">Sin actividades de ${esc(crearState.tipoLabel)} → usa texto libre</span>`) : '';
+  if(listo && n===0 && !soloProg && !crearState.actividadLibre) toggleActividadLibre();   // abre texto libre automáticamente
 }
 function pintarInfoActividadLibre(){
   const el = document.getElementById('actividadLibreInfo'); if(!el) return;
@@ -1304,6 +1321,7 @@ function wireCrearAutocompletes(){
       document.getElementById('actividadLibrePanel').classList.add('hidden');
       crearState.actividadLibre=false;
       document.getElementById('btnActividadLibre').textContent = '¿No encuentras la actividad? Usa texto libre';
+      if(tipoSoloProgramadas(crearState.tipoLabel) && !actividadesFiltradas().length) crearState.tipoLabel = '';
       paintChipsTipo();
       refrescarCampoActividad();
     },
@@ -1328,6 +1346,9 @@ function wireCrearAutocompletes(){
 }
 
 function toggleActividadLibre(){
+  if(!crearState.actividadLibre && tipoSoloProgramadas(crearState.tipoLabel)){
+    toast('Las evaluaciones solo se eligen de su programación; no se pueden escribir a mano', 'error'); return;
+  }
   crearState.actividadLibre = !crearState.actividadLibre;
   document.getElementById('actividadLibrePanel').classList.toggle('hidden', !crearState.actividadLibre);
   const inp = document.getElementById('ac_input_actividad');
@@ -1423,6 +1444,7 @@ function construirOTMDesdeFormulario(){
   const tipoSel = tipoDe('', crearState.tipoLabel);
   let actividadNombre, actividadTipo = tipoSel.tipo, esActividadLibre=false;
   if(crearState.actividadLibre){
+    if(tipoSel.soloProgramadas){ toast('Las evaluaciones solo se eligen de su programación', 'error'); return null; }
     actividadNombre = document.getElementById('f_actividad_libre_nombre').value.trim();
     esActividadLibre = true;
     if(!actividadNombre){ toast('Escribe el nombre de la nueva actividad', 'error'); return null; }
