@@ -190,7 +190,7 @@
 /* =========================================================
    CONEXIÓN A GOOGLE SHEETS (Apps Script Web App)
    ========================================================= */
-const APP_VERSION = '2.7';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
+const APP_VERSION = '2.8';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
 const CONFIG = {
   // Pegar acá la URL que entrega Apps Script al publicar ("Implementar > Nueva implementación > Aplicación web")
   API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
@@ -288,11 +288,38 @@ window.addEventListener('beforeunload', e=>{ if(pendientesSync>0){ e.preventDefa
    ========================================================= */
 let EQUIPOS = [];   // se llenan desde el Sheet (antes había datos de ejemplo aquí)
 
-// Actividad -> DNI -> Tipo_Mtto (MP=Preventivo, MC=Correctivo, MMJ=Mejora)
+// DNI -> [{a: actividad, tipo: 'MP'|'MC'|'IM', label: 'Preventivo'|'Evaluacion'|..., sap}]
 let ACTIVIDADES = {};
-const TIPO_MTTO_LABEL = {MP:'Preventivo', MC:'Correctivo', MMJ:'Mejora'};
+/* Tipos de mantenimiento (como en la base del Sheet). Dos tipos comparten código MP
+   (Preventivo y Evaluacion); por eso se distinguen por su ETIQUETA. */
+const TIPOS_BASE = [
+  {label:'Preventivo',           tipo:'MP', sap:'OM03', color:'#0a6ed1', chip:'bg-brand-50 text-brand-700'},
+  {label:'Evaluacion',           tipo:'MP', sap:'OM03', color:'#06b6d4', chip:'bg-cyan-50 text-cyan-700'},
+  {label:'Correctivo',           tipo:'MC', sap:'OM01', color:'#f59e0b', chip:'bg-orange-50 text-orange-700'},
+  {label:'Instalacion y Mejora', tipo:'IM', sap:'OM04', color:'#8b5cf6', chip:'bg-violet-50 text-violet-700'},
+];
+let TIPOS = TIPOS_BASE.slice();
+const TIPO_MTTO_LABEL = {MP:'Preventivo', MC:'Correctivo', IM:'Instalacion y Mejora', MMJ:'Instalacion y Mejora'};
+/* Devuelve el tipo (objeto de TIPOS) a partir de su etiqueta o, si no hay, de su código */
+function tipoDe(codigo, label){
+  if(label){ const t = TIPOS.find(x=> norm(x.label)===norm(label)); if(t) return t; }
+  const c = String(codigo||'').toUpperCase() === 'MMJ' ? 'IM' : String(codigo||'').toUpperCase();
+  return TIPOS.find(x=> x.tipo===c && norm(x.label)===norm(TIPO_MTTO_LABEL[c]||'')) || TIPOS.find(x=> x.tipo===c)
+      || {label: label || codigo || 'Sin tipo', tipo: c, sap:'', color:'#aab7c4', chip:'bg-ink-100 text-ink-600'};
+}
+function tipoOTM(o){ return tipoDe(o.tipoMtto, o.tipoMttoLabel); }
+/* Agrega a TIPOS cualquier tipo nuevo que aparezca en la hoja ACTIVIDADES */
+function actualizarTiposDesdeActividades(){
+  TIPOS = TIPOS_BASE.slice();
+  const extras = ['#10b981','#ef4444','#64748b'];
+  Object.values(ACTIVIDADES).flat().forEach(a=>{
+    if(a.label && !TIPOS.some(t=> norm(t.label)===norm(a.label))){
+      TIPOS.push({label:a.label, tipo:a.tipo, sap:a.sap||TIPO_ORDEN_SAP[a.tipo]||'', color:extras[(TIPOS.length-4)%3], chip:'bg-ink-100 text-ink-700'});
+    }
+  });
+}
 // Tipo de orden SAP asociado (según hoja ACTIVIDADES: columna "Tipo")
-const TIPO_ORDEN_SAP = {MP:'OM03', MC:'OM01', MMJ:'OM04'};
+const TIPO_ORDEN_SAP = {MP:'OM03', MC:'OM01', IM:'OM04', MMJ:'OM04'};
 const ORDEN_SAP_COLOR = {OM03:'bg-emerald-600', OM01:'bg-red-600', OM04:'bg-violet-600'};
 
 // Maestro de personal (TRABAJADORES): Cargo + Estado definen quién puede ser Responsable o Técnico asignable
@@ -396,6 +423,7 @@ function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e)
 function aplicarCore(data){
   EQUIPOS = data.equipos;
   ACTIVIDADES = data.actividades;
+  actualizarTiposDesdeActividades();
   PERSONAL = data.personal;
   // Comparación tolerante: ignora mayúsculas, tildes y espacios ("TECNICO", "Técnico ", "activo")
   const activo = p => norm(p.estado).trim()==='activo';
@@ -442,7 +470,7 @@ function vistaActual(){
 /* Re-pinta la vista activa sin borrar un formulario que el usuario esté llenando */
 function refrescarVista(){
   const v = vistaActual();
-  if(v==='crear'){ paintChipsCrear(); return; }   // solo agrega los botones, no borra lo escrito
+  if(v==='crear'){ paintChipsCrear(); paintChipsTipo(); refrescarCampoActividad(); return; }   // solo agrega los botones, no borra lo escrito
   if(document.getElementById('modalRoot').innerHTML) return;
   if(v==='gestion') renderGestion();
   if(v==='dashboard') renderDashboard();
@@ -627,9 +655,9 @@ function badgePrioridad(p){
   };
   return `<span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${map[p]}">${p}</span>`;
 }
-function badgeTipoMtto(t){
-  const map = {MP:'bg-emerald-50 text-emerald-700', MC:'bg-orange-50 text-orange-700', MMJ:'bg-violet-50 text-violet-700'};
-  return `<span class="chip px-2 py-0.5 rounded-md text-[11px] font-semibold ${map[t]}">${TIPO_MTTO_LABEL[t]}</span>`;
+function badgeTipoMtto(t, label){
+  const x = tipoDe(t, label);
+  return `<span class="chip px-2 py-0.5 rounded-md text-[11px] font-semibold ${x.chip}">${esc(x.label)}</span>`;
 }
 function badgeOrdenSAP(t){
   const orden = TIPO_ORDEN_SAP[t] || 'OM0X';
@@ -687,7 +715,7 @@ let dashboardFilter = {estado:null, tipo:null, prioridad:null, responsable:null}
 function applyDashboardFilter(list){
   return list.filter(o=>{
     if(dashboardFilter.estado && o.estado!==dashboardFilter.estado) return false;
-    if(dashboardFilter.tipo && o.tipoMtto!==dashboardFilter.tipo) return false;
+    if(dashboardFilter.tipo && norm(tipoOTM(o).label)!==norm(dashboardFilter.tipo)) return false;
     if(dashboardFilter.prioridad && o.prioridad!==dashboardFilter.prioridad) return false;
     if(dashboardFilter.responsable && o.responsable!==dashboardFilter.responsable) return false;
     return true;
@@ -716,10 +744,12 @@ function renderDashboard(){
   const maxEstado = Math.max(...Object.values(estadoCount),1);
   const estadoColor = {'Pendiente':'#c7d0da','Programada':'#4aa4ff','En ejecución':'#0a6ed1','Esperando material':'#f59e0b','Esperando aprobación':'#8b5cf6','Completada':'#10b981','Cancelada':'#ef4444'};
 
-  const tipoCount = {MP:0,MC:0,MMJ:0};
-  OTMS.forEach(o=> tipoCount[o.tipoMtto]++);
+  const tipoCount = {};
+  TIPOS.forEach(t=> tipoCount[t.label] = 0);
+  OTMS.forEach(o=>{ const l = tipoOTM(o).label; tipoCount[l] = (tipoCount[l]||0) + 1; });
   const tTotal = OTMS.length || 1;
-  const p1 = tipoCount.MP/tTotal*100, p2 = tipoCount.MC/tTotal*100, p3 = tipoCount.MMJ/tTotal*100;
+  let acumDonut = 0;
+  const segmentosDonut = TIPOS.map(t=>{ const p = (tipoCount[t.label]||0)/tTotal*100; const seg = {color:t.color, p, off:-acumDonut}; acumDonut += p; return seg; });
 
   const prioCount = {};
   PRIORIDADES.forEach(p=> prioCount[p]=0);
@@ -746,7 +776,7 @@ function renderDashboard(){
   const filtered = applyDashboardFilter(OTMS);
   const filtroActivo = Object.values(dashboardFilter).some(v=>v);
   const etiquetaFiltro = {estado:'Estado', tipo:'Tipo', prioridad:'Prioridad', responsable:'Responsable'};
-  const valorFiltro = (k,v)=> k==='tipo' ? (TIPO_MTTO_LABEL[v]||v) : v;
+  const valorFiltro = (k,v)=> v;
   const corto = (t,n)=> t.length>n ? t.slice(0,n)+'…' : t;
 
   /* Indicador compacto (3 por fila en celular, 6 en PC). Si tiene "estado", al tocarlo filtra. */
@@ -785,8 +815,8 @@ function renderDashboard(){
     return [ini, conCosto.filter(o=>{ const f = isoDate(o.fecha); return f >= ini && f <= fin; }).reduce((s,o)=> s + costoOTM(o), 0)];
   });
   const maxSem = Math.max(...costoSem.map(x=>x[1]), 1);
-  const cTipo = agrupar(conCosto, o=> o.tipoMtto);
-  const tipoCosto = [['MP','Preventivo','#0a6ed1'],['MC','Correctivo','#f59e0b'],['MMJ','Mejora','#8b5cf6']].map(([k,l,c])=>[k,l,c,cTipo[k]||0]);
+  const cTipo = agrupar(conCosto, o=> tipoOTM(o).label);
+  const tipoCosto = TIPOS.map(t=>[t.label, t.label, t.color, cTipo[t.label]||0]);
   const maxTipoC = Math.max(...tipoCosto.map(x=>x[3]), 1);
   const cEquipo = Object.entries(agrupar(conCosto, o=> o.equipo)).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const maxEqC = Math.max(...cEquipo.map(x=>x[1]), 1);
@@ -836,7 +866,7 @@ function renderDashboard(){
       </div>
       ${tarjeta('Costo por tipo de mantenimiento', 'Toca para filtrar',
         tipoCosto.map(([k,l,c,v])=>`
-          <button onclick="setDashFilter('tipo','${k}')" class="filter-bar-btn w-full text-left block ${dashboardFilter.tipo && dashboardFilter.tipo!==k ? 'dimmed':''}">
+          <button onclick="setDashFilter('tipo','${jsq(k)}')" class="filter-bar-btn w-full text-left block ${dashboardFilter.tipo && norm(dashboardFilter.tipo)!==norm(k) ? 'dimmed':''}">
             <div class="flex justify-between text-xs mb-1"><span class="text-ink-600 flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${c}"></span>${l}</span>
               <span class="font-semibold text-ink-800">${fmtSoles(v)} <span class="font-normal text-ink-400">${costoTotal ? Math.round(v/costoTotal*100) : 0}%</span></span></div>
             <div class="w-full bg-ink-100 rounded-full h-2"><div class="bar h-2 rounded-full" style="width:${v/maxTipoC*100}%;background:${c}"></div></div>
@@ -899,15 +929,13 @@ function renderDashboard(){
         <div class="flex items-center gap-4">
           <svg viewBox="0 0 42 42" class="w-24 h-24 lg:w-32 lg:h-32 -rotate-90 flex-shrink-0">
             <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#e8ecf1" stroke-width="6"></circle>
-            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#0a6ed1" stroke-width="6" stroke-dasharray="${p1} ${100-p1}" stroke-dashoffset="0"></circle>
-            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#f59e0b" stroke-width="6" stroke-dasharray="${p2} ${100-p2}" stroke-dashoffset="${-p1}"></circle>
-            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#8b5cf6" stroke-width="6" stroke-dasharray="${p3} ${100-p3}" stroke-dashoffset="${-(p1+p2)}"></circle>
+            ${segmentosDonut.map(sg=>`<circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="${sg.color}" stroke-width="6" stroke-dasharray="${sg.p} ${100-sg.p}" stroke-dashoffset="${sg.off}"></circle>`).join('')}
           </svg>
           <div class="flex-1 space-y-1 text-xs">
-            ${[['MP','Preventivo','bg-brand-500'],['MC','Correctivo','bg-amber-500'],['MMJ','Mejora','bg-violet-500']].map(([k,l,c])=>`
-              <button onclick="setDashFilter('tipo','${k}')" class="filter-bar-btn w-full flex justify-between items-center py-1.5 ${dashboardFilter.tipo && dashboardFilter.tipo!==k ? 'dimmed':''}">
-                <span class="flex items-center gap-1.5 text-ink-600"><span class="w-2.5 h-2.5 rounded-full ${c}"></span>${l}</span>
-                <span class="font-semibold text-ink-800">${tipoCount[k]} <span class="font-normal text-ink-400">(${Math.round(tipoCount[k]/tTotal*100)}%)</span></span>
+            ${TIPOS.map(t=>`
+              <button onclick="setDashFilter('tipo','${jsq(t.label)}')" class="filter-bar-btn w-full flex justify-between items-center gap-2 py-1.5 ${dashboardFilter.tipo && norm(dashboardFilter.tipo)!==norm(t.label) ? 'dimmed':''}">
+                <span class="flex items-center gap-1.5 text-ink-600 text-left"><span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${t.color}"></span>${esc(t.label)}</span>
+                <span class="font-semibold text-ink-800 whitespace-nowrap">${tipoCount[t.label]||0} <span class="font-normal text-ink-400">(${Math.round((tipoCount[t.label]||0)/tTotal*100)}%)</span></span>
               </button>`).join('')}
           </div>
         </div>
@@ -1022,7 +1050,7 @@ let crearState = {
 };
 
 function renderCrear(){
-  crearState = { equipoDni:'', actividadNombre:'', actividadTipo:'', actividadLibre:false, selectedTecnicos:[], externoActivo:false, materiales:[], idOTM:null };
+  crearState = { equipoDni:'', actividadNombre:'', actividadTipo:'', tipoLabel:'', actividadLibre:false, selectedTecnicos:[], externoActivo:false, materiales:[], idOTM:null };
   document.getElementById('view-crear').innerHTML = `
   <div class="bg-white rounded-xl shadow-card border border-ink-100 max-w-3xl mx-auto">
     <div class="px-5 lg:px-8 py-5 border-b border-ink-100">
@@ -1043,43 +1071,35 @@ function renderCrear(){
             <div id="ac_list_equipo" class="ac-list hidden"></div>
             <input type="hidden" id="f_dni">
           </div>
-          <div class="relative">
-            <label class="block text-sm font-medium text-ink-700 mb-1.5">Actividad *</label>
-            <input type="text" id="ac_input_actividad" autocomplete="off" disabled placeholder="Primero elige un equipo…"
-              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm disabled:bg-ink-50 disabled:text-ink-400">
-            <div id="ac_list_actividad" class="ac-list hidden"></div>
-            <button type="button" id="btnActividadLibre" onclick="toggleActividadLibre()" class="mt-1.5 text-xs text-brand-600 hover:text-brand-700 underline">¿No encuentras la actividad? Usa texto libre</button>
-          </div>
-        </div>
-
-        <div id="actividadLibrePanel" class="hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-brand-50/50 border border-brand-100 rounded-lg p-4">
-          <div class="sm:col-span-2">
-            <label class="block text-sm font-medium text-ink-700 mb-1.5">Nombre de la nueva actividad *</label>
-            <input type="text" id="f_actividad_libre_nombre" placeholder="Describe la actividad realizada"
-              class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-ink-700 mb-1.5">Tipo de mantenimiento (OT) *</label>
-            <select id="f_actividad_libre_tipo" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-              <option value="MP">Preventivo (MP)</option>
-              <option value="MC">Correctivo (MC)</option>
-              <option value="MMJ">Mejora (MMJ)</option>
-            </select>
-          </div>
-          <p class="sm:col-span-2 text-[11px] text-ink-500">Esta actividad quedará disponible para este equipo en próximas OTM.</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-          <div>
-            <label class="block text-sm font-medium text-ink-700 mb-1.5">Tipo de mantenimiento</label>
-            <input type="text" id="f_tipo_mtto" disabled placeholder="Automático según actividad"
-              class="w-full border border-ink-200 bg-ink-50 rounded-lg px-3 py-2 text-sm text-ink-500">
-          </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5">Fecha de la OTM *</label>
             <input type="date" id="f_fecha" required value="${hoyLima()}"
               class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
           </div>
+        </div>
+
+        <!-- 1° Tipo de mantenimiento  →  2° Actividad (filtrada por equipo y tipo) -->
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Tipo de mantenimiento *</label>
+          <div id="chipsTipo" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+        </div>
+
+        <div class="relative mt-4">
+          <div class="flex items-baseline justify-between gap-2 mb-1.5">
+            <label class="block text-sm font-medium text-ink-700 whitespace-nowrap">Actividad *</label>
+            <span id="actividadesCount" class="text-[11px] text-ink-400 text-right"></span>
+          </div>
+          <input type="text" id="ac_input_actividad" autocomplete="off" disabled placeholder="Primero elige el equipo y el tipo de mantenimiento…"
+            class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm disabled:bg-ink-50 disabled:text-ink-400">
+          <div id="ac_list_actividad" class="ac-list hidden"></div>
+          <button type="button" id="btnActividadLibre" onclick="toggleActividadLibre()" class="mt-1.5 text-xs text-brand-600 hover:text-brand-700 underline">¿No encuentras la actividad? Usa texto libre</button>
+        </div>
+
+        <div id="actividadLibrePanel" class="hidden mt-3 bg-brand-50/50 border border-brand-100 rounded-lg p-4">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Nombre de la nueva actividad *</label>
+          <input type="text" id="f_actividad_libre_nombre" placeholder="Describe la actividad realizada"
+            class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+          <p id="actividadLibreInfo" class="text-[11px] text-ink-500 mt-2"></p>
         </div>
 
         <div class="mt-4">
@@ -1190,7 +1210,62 @@ function renderCrear(){
   `;
   paintMaterialesForm();
   paintChipsCrear();
+  paintChipsTipo();
   wireCrearAutocompletes();
+}
+
+/* ---- Tipo de mantenimiento (se elige ANTES de la actividad) ---- */
+function actividadesFiltradas(){
+  if(!crearState.equipoDni || !crearState.tipoLabel) return [];
+  return (ACTIVIDADES[crearState.equipoDni]||[]).filter(a=> norm(tipoDe(a.tipo, a.label).label) === norm(crearState.tipoLabel));
+}
+function paintChipsTipo(){
+  const el = document.getElementById('chipsTipo'); if(!el) return;
+  const delEquipo = crearState.equipoDni ? (ACTIVIDADES[crearState.equipoDni]||[]) : null;
+  el.innerHTML = TIPOS.map(t=>{
+    const on = norm(t.label)===norm(crearState.tipoLabel);
+    const n = delEquipo ? delEquipo.filter(a=> norm(tipoDe(a.tipo,a.label).label)===norm(t.label)).length : null;
+    return `<button type="button" onclick="seleccionarTipo('${jsq(t.label)}')"
+      class="px-3 py-2 rounded-lg text-sm font-medium border text-left leading-tight transition ${on ? 'text-white border-transparent' : 'border-ink-200 text-ink-700 hover:border-ink-300'}"
+      style="${on ? `background:${t.color}` : ''}">
+      <span class="flex items-center gap-1.5">${on?'':`<span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${t.color}"></span>`}${esc(t.label)}</span>
+      <span class="block text-[10px] font-normal ${on?'text-white/80':'text-ink-400'}">${t.tipo} · ${t.sap}${n!==null ? ` · ${n} act.` : ''}</span>
+    </button>`;
+  }).join('');
+}
+function seleccionarTipo(label){
+  crearState.tipoLabel = label;
+  const t = tipoDe('', label);
+  crearState.actividadTipo = t.tipo;
+  crearState.actividadNombre = '';
+  const inp = document.getElementById('ac_input_actividad');
+  inp.value = '';
+  paintChipsTipo();
+  // si el texto libre se abrió solo y está vacío, pero este tipo sí tiene actividades, vuelve a la lista
+  const libre = document.getElementById('f_actividad_libre_nombre');
+  if(crearState.actividadLibre && !libre.value.trim() && actividadesFiltradas().length) toggleActividadLibre();
+  refrescarCampoActividad();
+  if(crearState.actividadLibre) pintarInfoActividadLibre();
+}
+/* Habilita la actividad solo cuando hay equipo y tipo; si no hay actividades de ese tipo, sugiere texto libre */
+function refrescarCampoActividad(){
+  const inp = document.getElementById('ac_input_actividad');
+  const cnt = document.getElementById('actividadesCount');
+  if(!inp) return;
+  const listo = crearState.equipoDni && crearState.tipoLabel;
+  inp.disabled = !listo || crearState.actividadLibre;
+  if(!crearState.equipoDni) inp.placeholder = 'Primero elige el equipo…';
+  else if(!crearState.tipoLabel) inp.placeholder = 'Ahora elige el tipo de mantenimiento…';
+  else inp.placeholder = 'Escribe para buscar la actividad…';
+  const n = actividadesFiltradas().length;
+  if(cnt) cnt.innerHTML = listo ? (n ? `${n} actividad(es) de ${esc(crearState.tipoLabel)}` : `<span class="text-amber-600">Sin actividades de ${esc(crearState.tipoLabel)} → usa texto libre</span>`) : '';
+  if(listo && n===0 && !crearState.actividadLibre) toggleActividadLibre();   // abre texto libre automáticamente
+}
+function pintarInfoActividadLibre(){
+  const el = document.getElementById('actividadLibreInfo'); if(!el) return;
+  el.innerHTML = crearState.tipoLabel
+    ? `Se registrará como <b>${esc(crearState.tipoLabel)}</b> (${esc(tipoDe('',crearState.tipoLabel).tipo)} · ${esc(tipoDe('',crearState.tipoLabel).sap)}) y quedará disponible para este equipo en próximas OTM.`
+    : `<span class="text-amber-600">Elige primero el tipo de mantenimiento.</span>`;
 }
 
 /* Pinta los botones de supervisores y técnicos. Se vuelve a llamar cuando llegan los
@@ -1224,26 +1299,25 @@ function wireCrearAutocompletes(){
     onPick: (dni)=>{
       crearState.equipoDni = dni;
       document.getElementById('f_dni').value = dni;
-      crearState.actividadNombre=''; crearState.actividadTipo='';
-      const actInput = document.getElementById('ac_input_actividad');
-      actInput.value=''; actInput.disabled=false; actInput.placeholder='Escribe para buscar la actividad…';
-      document.getElementById('f_tipo_mtto').value='';
+      crearState.actividadNombre='';
+      document.getElementById('ac_input_actividad').value='';
       document.getElementById('actividadLibrePanel').classList.add('hidden');
       crearState.actividadLibre=false;
+      document.getElementById('btnActividadLibre').textContent = '¿No encuentras la actividad? Usa texto libre';
+      paintChipsTipo();
+      refrescarCampoActividad();
     },
     emptyText:'No se encontró el equipo'
   });
   wireAutocomplete({
     inputId:'ac_input_actividad', listId:'ac_list_actividad',
-    itemsProvider: ()=> crearState.equipoDni ? (ACTIVIDADES[crearState.equipoDni]||[]).map(a=>({value:a.tipo, label:a.a})) : [],
+    itemsProvider: ()=> actividadesFiltradas().map(a=>({value:a.tipo, label:a.a})),
     onPick: (tipo,label)=>{
       crearState.actividadNombre = label;
-      crearState.actividadTipo = tipo;
       crearState.actividadLibre = false;
       document.getElementById('actividadLibrePanel').classList.add('hidden');
-      document.getElementById('f_tipo_mtto').value = TIPO_MTTO_LABEL[tipo];
     },
-    emptyText:'No hay actividades registradas para este equipo'
+    emptyText:'No hay actividades de este tipo para el equipo — usa texto libre'
   });
   wireAutocomplete({
     inputId:'ac_input_material', listId:'ac_list_material',
@@ -1256,10 +1330,16 @@ function wireCrearAutocompletes(){
 function toggleActividadLibre(){
   crearState.actividadLibre = !crearState.actividadLibre;
   document.getElementById('actividadLibrePanel').classList.toggle('hidden', !crearState.actividadLibre);
+  const inp = document.getElementById('ac_input_actividad');
   if(crearState.actividadLibre){
-    document.getElementById('ac_input_actividad').value='';
-    crearState.actividadNombre=''; crearState.actividadTipo='';
-    document.getElementById('f_tipo_mtto').value='';
+    inp.value=''; inp.disabled = true;
+    crearState.actividadNombre='';
+    pintarInfoActividadLibre();
+    document.getElementById('btnActividadLibre').textContent = 'Volver a la lista de actividades';
+    setTimeout(()=> document.getElementById('f_actividad_libre_nombre').focus(), 50);
+  } else {
+    inp.disabled = !(crearState.equipoDni && crearState.tipoLabel);
+    document.getElementById('btnActividadLibre').textContent = '¿No encuentras la actividad? Usa texto libre';
   }
 }
 function selectChip(btn, group, value){
@@ -1339,16 +1419,16 @@ function construirOTMDesdeFormulario(){
   const equipo = EQUIPOS.find(x=>String(x.dni)===crearState.equipoDni);
   if(!equipo){ toast('Selecciona un equipo de la lista', 'error'); return null; }
 
-  let actividadNombre, actividadTipo, esActividadLibre=false;
+  if(!crearState.tipoLabel){ toast('Selecciona el tipo de mantenimiento', 'error'); return null; }
+  const tipoSel = tipoDe('', crearState.tipoLabel);
+  let actividadNombre, actividadTipo = tipoSel.tipo, esActividadLibre=false;
   if(crearState.actividadLibre){
     actividadNombre = document.getElementById('f_actividad_libre_nombre').value.trim();
-    actividadTipo = document.getElementById('f_actividad_libre_tipo').value;
     esActividadLibre = true;
     if(!actividadNombre){ toast('Escribe el nombre de la nueva actividad', 'error'); return null; }
     // (la actividad se guarda en el Sheet recién cuando la OTM pasa todas las validaciones)
   } else {
     actividadNombre = crearState.actividadNombre;
-    actividadTipo = crearState.actividadTipo;
     if(!actividadNombre){ toast('Selecciona una actividad o usa texto libre', 'error'); return null; }
   }
 
@@ -1379,6 +1459,8 @@ function construirOTMDesdeFormulario(){
     actividad: actividadNombre,
     esActividadLibre,
     tipoMtto: actividadTipo,
+    tipoMttoLabel: tipoSel.label,
+    tipoOrdenSap: tipoSel.sap,
     prioridad, responsable,
     estado: 'Pendiente',
     internos, externos, participantes,
@@ -1405,10 +1487,10 @@ function setGuardando(v){
 }
 async function guardarNuevaOTM(nueva){
   if(nueva.esActividadLibre){
-    await apiPost('nueva_actividad', {dni:nueva.dni, actividad:nueva.actividad, tipo:nueva.tipoMtto});
+    await apiPost('nueva_actividad', {dni:nueva.dni, actividad:nueva.actividad, tipo:nueva.tipoMtto, label:nueva.tipoMttoLabel, sap:nueva.tipoOrdenSap});
     const k = String(nueva.dni);
     if(!ACTIVIDADES[k]) ACTIVIDADES[k] = [];
-    if(!ACTIVIDADES[k].some(a=>norm(a.a)===norm(nueva.actividad))) ACTIVIDADES[k].push({a:nueva.actividad, tipo:nueva.tipoMtto});
+    if(!ACTIVIDADES[k].some(a=>norm(a.a)===norm(nueva.actividad))) ACTIVIDADES[k].push({a:nueva.actividad, tipo:nueva.tipoMtto, label:nueva.tipoMttoLabel, sap:nueva.tipoOrdenSap});
   }
   const r = await apiPost('upsert_otm', {otm:nueva});
   if(r && r.fecha) nueva.fecha = new Date(r.fecha);   // fecha y hora reales asignadas por el servidor
@@ -1435,7 +1517,7 @@ function mensajeWhatsAppOTM(o){
     `⚙️ *Equipo:* ${o.equipo}`,
     `🔢 *DNI:* ${o.dni}`,
     `🧰 *Actividad:* ${o.actividad}`,
-    `🏷️ *Tipo:* ${TIPO_MTTO_LABEL[o.tipoMtto]} (${TIPO_ORDEN_SAP[o.tipoMtto]})`,
+    `🏷️ *Tipo:* ${tipoOTM(o).label} (${tipoOTM(o).sap})`,
     `🚦 *Prioridad:* ${o.prioridad}`,
     `👷 *Responsable:* ${o.responsable}`,
     `📅 *Fecha:* ${fmtDate(o.fecha)}`,
@@ -1465,7 +1547,7 @@ function mensajeReenvioOTM(o){
   const l = [`🔁 *OTM (reenvío)*`, ...cabeceraOTM(o)];
   l.splice(3, 0, `🔢 *DNI:* ${o.dni}`);
   l.push(
-    `🏷️ *Tipo:* ${TIPO_MTTO_LABEL[o.tipoMtto]||''} (${TIPO_ORDEN_SAP[o.tipoMtto]||''})`,
+    `🏷️ *Tipo:* ${tipoOTM(o).label} (${tipoOTM(o).sap})`,
     `🚦 *Prioridad:* ${o.prioridad}`,
     `📌 *Estado:* ${o.estado}`,
     `📅 *Fecha:* ${fmtDate(o.fecha)}`,
@@ -1671,7 +1753,7 @@ function paintGestionCards(){
     return;
   }
   wrap.innerHTML = list.map(o=>{
-    const orden = TIPO_ORDEN_SAP[o.tipoMtto] || 'OM0X';
+    const orden = tipoOTM(o).sap || TIPO_ORDEN_SAP[o.tipoMtto] || 'OM0X';
     const desc = [o.componente!=='—'?o.componente:'', o.sintoma!=='—'?o.sintoma:''].filter(Boolean).join(' — ') || o.actividad;
     return `
     <div class="otm-card bg-white rounded-xl border border-ink-100 shadow-card hover:shadow-pop flex">
@@ -1774,7 +1856,7 @@ function openVerModal(o){
             <div><p class="text-xs text-ink-400">Equipo</p><p class="text-ink-800 font-medium">${o.equipo}</p></div>
             <div><p class="text-xs text-ink-400">DNI SAP</p><p class="text-ink-800 font-medium">${o.dni}</p></div>
             <div><p class="text-xs text-ink-400">Actividad</p><p class="text-ink-800 font-medium">${o.actividad}</p></div>
-            <div><p class="text-xs text-ink-400">Tipo Mtto / Orden SAP</p><div class="flex gap-1.5">${badgeTipoMtto(o.tipoMtto)}${badgeOrdenSAP(o.tipoMtto)}</div></div>
+            <div><p class="text-xs text-ink-400">Tipo Mtto / Orden SAP</p><div class="flex gap-1.5">${badgeTipoMtto(o.tipoMtto, o.tipoMttoLabel)}${badgeOrdenSAP(o.tipoMtto)}</div></div>
             <div><p class="text-xs text-ink-400">Prioridad</p>${badgePrioridad(o.prioridad)}</div>
             <div><p class="text-xs text-ink-400">Responsable</p><p class="text-ink-800 font-medium">${o.responsable}</p></div>
             <div><p class="text-xs text-ink-400">Componente afectado</p><p class="text-ink-800 font-medium">${o.componente}</p></div>
