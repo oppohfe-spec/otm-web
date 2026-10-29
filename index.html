@@ -64,14 +64,15 @@
   .otm-card{transition:box-shadow .15s;}
 
   /* ===== Celular / tablet ===== */
-  .bottom-nav{padding-bottom:env(safe-area-inset-bottom);}
-  .bottom-nav button.active{color:#0a6ed1;}
-  .bottom-nav button.active svg{stroke-width:2.2;}
+  .top-tabs button{position:relative;transition:color .15s;}
+  .top-tabs button.active{color:#0a6ed1;}
+  .top-tabs button.active svg{stroke-width:2.2;}
+  .top-tabs button.active::after{content:'';position:absolute;left:18%;right:18%;bottom:0;height:3px;border-radius:3px 3px 0 0;background:#0a6ed1;}
   @media (max-width:1023px){
-    main{padding-bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
-    #toastContainer{left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));}
+    main{padding-bottom:calc(16px + env(safe-area-inset-bottom)) !important;}
+    #toastContainer{left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));}
     #toastContainer .toast{max-width:none;}
-    .form-actions{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));z-index:5;background:#fff;
+    .form-actions{position:sticky;bottom:env(safe-area-inset-bottom);z-index:5;background:#fff;
       margin:0 -1.25rem -1.5rem;padding:12px 1.25rem;border-top:1px solid #e8ecf1;border-radius:0 0 12px 12px;}
   }
   @media (max-width:639px){
@@ -136,9 +137,10 @@
   <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/40 z-20 lg:hidden"></div>
 
   <!-- MAIN -->
-  <div class="flex-1 lg:ml-64 flex flex-col min-h-screen">
+  <div class="flex-1 min-w-0 lg:ml-64 flex flex-col min-h-screen">
     <!-- NAVBAR -->
-    <header class="h-16 sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-ink-100 flex items-center gap-3 px-4 lg:px-6">
+    <div class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-ink-100" style="padding-top:env(safe-area-inset-top)">
+    <header class="h-14 lg:h-16 flex items-center gap-3 px-4 lg:px-6">
       <button onclick="toggleSidebar()" class="lg:hidden text-ink-500 hover:text-ink-800">
         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
       </button>
@@ -157,6 +159,18 @@
         </button>
       </div>
     </header>
+    <!-- Pestañas superiores (celular y tablet) -->
+    <nav class="top-tabs lg:hidden grid grid-cols-4 text-[11px] sm:text-xs font-medium text-ink-500 border-t border-ink-100">
+      <button data-view="crear" onclick="navigate('crear')" class="active flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 h-12">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>Reportar</button>
+      <button data-view="gestion" onclick="navigate('gestion')" class="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 h-12">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>OTM del día</button>
+      <button data-view="materiales" onclick="navigate('materiales')" class="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 h-12">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-8.25-4.5L3.75 7.5m16.5 0l-8.25 4.5m8.25-4.5v9L12 21m0-9L3.75 7.5m8.25 4.5V21M3.75 7.5v9L12 21"/></svg>Materiales</button>
+      <button data-view="dashboard" onclick="navigate('dashboard')" class="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 h-12">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z"/></svg>Dashboard</button>
+    </nav>
+    </div>
 
     <main class="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto">
       <div id="view-dashboard" class="hidden"></div>
@@ -167,17 +181,7 @@
   </div>
 </div>
 
-<!-- Barra de navegación inferior (celular y tablet) -->
-<nav class="bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-20 bg-white border-t border-ink-100 grid grid-cols-4 text-[11px] font-medium text-ink-500">
-  <button data-view="gestion" onclick="navigate('gestion')" class="active flex flex-col items-center justify-center gap-0.5 h-16">
-    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>OTM del día</button>
-  <button data-view="crear" onclick="navigate('crear')" class="flex flex-col items-center justify-center gap-0.5 h-16">
-    <span class="w-9 h-9 -mt-1 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-pop"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></span>Reportar</button>
-  <button data-view="materiales" onclick="navigate('materiales')" class="flex flex-col items-center justify-center gap-0.5 h-16">
-    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-8.25-4.5L3.75 7.5m16.5 0l-8.25 4.5m8.25-4.5v9L12 21m0-9L3.75 7.5m8.25 4.5V21M3.75 7.5v9L12 21"/></svg>Materiales</button>
-  <button data-view="dashboard" onclick="navigate('dashboard')" class="flex flex-col items-center justify-center gap-0.5 h-16">
-    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z"/></svg>Dashboard</button>
-</nav>
+
 
 <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
 <div id="modalRoot"></div>
@@ -186,7 +190,7 @@
 /* =========================================================
    CONEXIÓN A GOOGLE SHEETS (Apps Script Web App)
    ========================================================= */
-const APP_VERSION = '2.5';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
+const APP_VERSION = '2.7';   // subir este número en cada cambio (el Sheet rechaza versiones viejas)
 const CONFIG = {
   // Pegar acá la URL que entrega Apps Script al publicar ("Implementar > Nueva implementación > Aplicación web")
   API_URL: 'https://script.google.com/macros/s/AKfycby5adGxSt6whoB_ap98AMo7Px_geCMD9WruevmUrHyRuo_1iMxUjJIrNxruQSLyTcXu/exec'
@@ -366,6 +370,15 @@ function coincide(hay, toks){ return toks.every(t => hay.includes(t)); }
 function jsq(s){ return String(s ?? '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+/* ---- Costos (soles) ---- */
+const _fmtSol = new Intl.NumberFormat('es-PE',{minimumFractionDigits:2, maximumFractionDigits:2});
+function fmtSoles(n){ return 'S/ ' + _fmtSol.format(Number(n)||0); }
+/* Precio unitario: los muy pequeños (ej. 0.0765) se muestran con 4 decimales */
+function fmtPU(n){ n = Number(n)||0; return 'S/ ' + n.toLocaleString('es-PE',{minimumFractionDigits:2, maximumFractionDigits: n>0 && n<1 ? 4 : 2}); }
+function precioCatalogo(codigo){ const m = MATERIALES.find(x=>x.codigo===String(codigo)); return m ? (m.precio||0) : 0; }
+function costoMat(m){ return (Number(m.cantidad)||0) * (Number(m.precio)||0); }
+function costoOTM(o){ return (o.materiales||[]).reduce((s,m)=> s + costoMat(m), 0); }
+
 let OTMS = [];
 let MATERIALES_CARGADOS = false;
 let CORE_CARGADO = false;
@@ -407,10 +420,10 @@ function aplicarCore(data){
 /* El catálogo llega en formato compacto [codigo, desc, unidad, stock, min, grupo] */
 function aplicarMateriales(lista){
   MATERIALES = lista.map(m => Array.isArray(m)
-    ? {codigo:String(m[0]), desc:String(m[1]), unidad:String(m[2]), stock:Number(m[3])||0, min:Number(m[4])||5, grupo:m[5]||''}
+    ? {codigo:String(m[0]), desc:String(m[1]), unidad:String(m[2]), stock:Number(m[3])||0, min:Number(m[4])||5, grupo:m[5]||'', precio:Number(m[6])||0, moneda:m[7]||'PEN'}
     : {...m, codigo:String(m.codigo), desc:String(m.desc ?? '')});
   MATERIALES.forEach(m=> m._q = norm(m.codigo+' '+m.desc));
-  MAT_ITEMS = MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad})`, q:m._q}));
+  MAT_ITEMS = MATERIALES.map(m=>({value:m.codigo, label:`${m.codigo} · ${m.desc} (stock ${m.stock} ${m.unidad} · ${m.precio ? fmtPU(m.precio)+' c/u' : 'sin precio'})`, q:m._q}));
   MATERIALES_CARGADOS = true;
   completarDescMateriales();
 }
@@ -419,7 +432,7 @@ function completarDescMateriales(){
   const map = {}; MATERIALES.forEach(m=> map[m.codigo]=m);
   OTMS.forEach(o=> o.materiales.forEach(x=>{
     const c = map[String(x.codigo)];
-    if(c){ if(!x.desc) x.desc = c.desc; if(!x.unidad) x.unidad = c.unidad; }
+    if(c){ if(!x.desc) x.desc = c.desc; if(!x.unidad) x.unidad = c.unidad; if(!(Number(x.precio) > 0)) x.precio = c.precio || 0; }
   }));
 }
 function vistaActual(){
@@ -468,12 +481,44 @@ function cargarMaterialesEnSegundoPlano(maxEdadMs=0){
 }
 /* Si hay un modal de material abierto, refresca el texto de stock con el valor nuevo */
 function actualizarStockEnModal(){
-  const txt = m => `Stock disponible: ${m.stock} ${esc(m.unidad)}${m.stock < m.min ? ' · <span class="text-amber-600 font-medium">stock bajo</span>':''}`;
-  const info = document.getElementById('asoc_stockinfo');
-  if(info && asocCodigo){ const m = MATERIALES.find(x=>x.codigo===asocCodigo); if(m) info.innerHTML = txt(m); }
-  const q = document.getElementById('qmat_codigo');
-  const el = document.getElementById('qmat_stockinfo');
-  if(q && q.value && el){ const m = MATERIALES.find(x=>x.codigo===q.value); if(m) el.innerHTML = txt(m); }
+  if(document.getElementById('asoc_resumen')) pintarResumenAsoc();
+  if(document.getElementById('qmat_resumen')) pintarResumenQmat();
+  if(document.getElementById('f_material_resumen')) pintarResumenForm();
+}
+/* Cuadro de costo de una reserva: precio unitario, costo de lo que se agrega y acumulado de la OTM */
+function htmlResumenCosto(m, cant, o){
+  if(!m) return '';
+  cant = Number(cant)||0;
+  const sub = cant * (m.precio||0);
+  const yaOTM = o ? costoOTM(o) : 0;
+  const fila = (k,v,cls='') => `<div class="flex justify-between gap-3 ${cls}"><span>${k}</span><span class="font-semibold">${v}</span></div>`;
+  return `<div class="mt-2 rounded-lg bg-ink-50 border border-ink-100 p-3 text-xs text-ink-600 space-y-1">
+    ${fila('Stock disponible', `${m.stock} ${esc(m.unidad)}${m.stock < m.min ? ' <span class="text-amber-600">· stock bajo</span>':''}${cant > m.stock ? ' <span class="text-red-600">· insuficiente</span>':''}`)}
+    ${fila('Precio unitario', m.precio ? fmtPU(m.precio) + ' / ' + esc(m.unidad) : '<span class="text-amber-600">sin precio</span>')}
+    ${fila('Costo de esta reserva', fmtSoles(sub), 'text-ink-800')}
+    ${o ? fila('Acumulado de la OTM', `${fmtSoles(yaOTM)} → <span class="text-brand-700">${fmtSoles(yaOTM + sub)}</span>`, 'pt-1 border-t border-ink-200 text-ink-800') : ''}
+  </div>`;
+}
+function pintarResumenAsoc(){
+  const el = document.getElementById('asoc_resumen'); if(!el) return;
+  const m = MATERIALES.find(x=>x.codigo===asocCodigo);
+  const o = OTMS.find(x=>x.id===(document.getElementById('asoc_otm')||{}).value);
+  el.innerHTML = htmlResumenCosto(m, parseFloat(document.getElementById('asoc_cant').value), o);
+}
+function pintarResumenQmat(){
+  const el = document.getElementById('qmat_resumen'); if(!el) return;
+  const cod = document.getElementById('qmat_codigo').value;
+  const m = MATERIALES.find(x=>x.codigo===String(cod));
+  const o = OTMS.find(x=>x.id===el.dataset.otm);
+  el.innerHTML = m ? htmlResumenCosto(m, parseFloat(document.getElementById('qmat_cant').value), o) : '';
+}
+function pintarResumenForm(){
+  const el = document.getElementById('f_material_resumen'); if(!el) return;
+  const cod = document.getElementById('f_material_codigo').value;
+  const m = MATERIALES.find(x=>x.codigo===String(cod));
+  if(!m){ el.innerHTML = ''; return; }
+  const acumulado = crearState.materiales.reduce((s,x)=> s + costoMat(x), 0);
+  el.innerHTML = htmlResumenCosto(m, parseFloat(document.getElementById('f_material_cant').value), {materiales: crearState.materiales});
 }
 
 function compararVersion(a, b){
@@ -532,7 +577,7 @@ const TITLES = {
 function navigate(view){
   document.querySelectorAll('[id^="view-"]').forEach(el=>el.classList.add('hidden'));
   document.getElementById('view-'+view).classList.remove('hidden');
-  document.querySelectorAll('.nav-link, .bottom-nav button').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
+  document.querySelectorAll('.nav-link, .top-tabs button').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
   document.getElementById('pageTitle').textContent = TITLES[view][0];
   document.getElementById('pageSubtitle').textContent = TITLES[view][1];
   if(view==='dashboard') renderDashboard();
@@ -700,154 +745,242 @@ function renderDashboard(){
 
   const filtered = applyDashboardFilter(OTMS);
   const filtroActivo = Object.values(dashboardFilter).some(v=>v);
+  const etiquetaFiltro = {estado:'Estado', tipo:'Tipo', prioridad:'Prioridad', responsable:'Responsable'};
+  const valorFiltro = (k,v)=> k==='tipo' ? (TIPO_MTTO_LABEL[v]||v) : v;
+  const corto = (t,n)=> t.length>n ? t.slice(0,n)+'…' : t;
+
+  /* Indicador compacto (3 por fila en celular, 6 en PC). Si tiene "estado", al tocarlo filtra. */
+  const kpi = (valor, label, color, filtroEstado) => `
+    <button ${filtroEstado?`onclick="setDashFilter('estado','${filtroEstado}')"`:''} class="text-left bg-white rounded-xl shadow-card border ${filtroEstado && dashboardFilter.estado===filtroEstado ? 'border-brand-400 ring-2 ring-brand-100':'border-ink-100'} p-3 lg:p-4 ${filtroEstado?'cursor-pointer hover:border-brand-300':'cursor-default'}">
+      <span class="block w-6 h-1 rounded-full mb-2" style="background:${color}"></span>
+      <p class="text-xl lg:text-3xl font-bold text-ink-900 leading-none">${valor}</p>
+      <p class="text-[11px] lg:text-xs font-medium text-ink-500 mt-1 leading-tight">${label}</p>
+    </button>`;
+
+  /* Lista de barras horizontales reutilizable */
+  const barras = (items, max, color, onclickFn, activo, fmt = x=>x) => items.map(([nombre, n])=>`
+    <${onclickFn?'button':'div'} ${onclickFn?`onclick="${onclickFn(nombre)}"`:''} class="${onclickFn?'filter-bar-btn':''} w-full text-left block ${activo && activo!==nombre ? 'dimmed':''}">
+      <div class="flex justify-between gap-2 text-xs mb-1">
+        <span class="text-ink-600 truncate">${esc(nombre)}</span>
+        <span class="font-semibold text-ink-800 whitespace-nowrap">${fmt(n)}</span>
+      </div>
+      <div class="w-full bg-ink-100 rounded-full h-1.5 lg:h-2">
+        <div class="bar h-1.5 lg:h-2 rounded-full" style="width:${(n/max*100)}%; background:${color}"></div>
+      </div>
+    </${onclickFn?'button':'div'}>`).join('') || '<p class="text-xs text-ink-400">Sin datos.</p>';
+
+  /* ===== COSTOS DE MATERIALES (respetan el filtro activo; no cuentan OTM Canceladas) ===== */
+  const conCosto = filtered.filter(o=> o.estado !== 'Cancelada');
+  const costoTotal = conCosto.reduce((s,o)=> s + costoOTM(o), 0);
+  const otmConMat = conCosto.filter(o=> costoOTM(o) > 0);
+  const costoProm = otmConMat.length ? costoTotal / otmConMat.length : 0;
+  const costoAbierto = conCosto.filter(o=> o.estado !== 'Completada').reduce((s,o)=> s + costoOTM(o), 0);
+  const fmtK = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : n.toFixed(0);
+  const agrupar = (lista, claveFn) => { const m = {}; lista.forEach(o=>{ const k = claveFn(o); m[k] = (m[k]||0) + costoOTM(o); }); return m; };
+  // Últimas 8 semanas (lunes a domingo, hora Perú)
+  const lunesHoy = lunesDeISO(hoyLima());
+  const semanas = Array.from({length:8}, (_,i)=> addDaysISO(lunesHoy, -7*(7-i)));
+  const costoSem = semanas.map(ini=>{
+    const fin = addDaysISO(ini, 6);
+    return [ini, conCosto.filter(o=>{ const f = isoDate(o.fecha); return f >= ini && f <= fin; }).reduce((s,o)=> s + costoOTM(o), 0)];
+  });
+  const maxSem = Math.max(...costoSem.map(x=>x[1]), 1);
+  const cTipo = agrupar(conCosto, o=> o.tipoMtto);
+  const tipoCosto = [['MP','Preventivo','#0a6ed1'],['MC','Correctivo','#f59e0b'],['MMJ','Mejora','#8b5cf6']].map(([k,l,c])=>[k,l,c,cTipo[k]||0]);
+  const maxTipoC = Math.max(...tipoCosto.map(x=>x[3]), 1);
+  const cEquipo = Object.entries(agrupar(conCosto, o=> o.equipo)).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxEqC = Math.max(...cEquipo.map(x=>x[1]), 1);
+  const cMat = {};
+  conCosto.forEach(o=> o.materiales.forEach(m=>{ const k = m.desc || m.codigo; cMat[k] = (cMat[k]||0) + costoMat(m); }));
+  const topMatC = Object.entries(cMat).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxMatC = Math.max(...topMatC.map(x=>x[1]), 1);
+  const cResp = Object.entries(agrupar(conCosto, o=> o.responsable)).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  const maxRespC = Math.max(...cResp.map(x=>x[1]), 1);
+
+  const seccionCostos = () => `
+    <div class="flex items-end justify-between gap-2 mt-1 mb-2 lg:mb-3">
+      <div>
+        <h2 class="text-sm lg:text-base font-semibold text-ink-900">Costos de materiales</h2>
+        <p class="text-[11px] lg:text-xs text-ink-400">Reservas valorizadas · ${filtroActivo ? 'según el filtro activo' : 'todas las OTM'} · sin canceladas</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-2 lg:gap-4 mb-3 lg:mb-4">
+      <div class="bg-gradient-to-br from-brand-600 to-brand-800 text-white rounded-xl shadow-card p-3 lg:p-4">
+        <p class="text-[11px] lg:text-xs text-white/80">Costo total</p>
+        <p class="text-[13px] sm:text-xl lg:text-3xl font-bold leading-tight mt-1 whitespace-nowrap tracking-tight">${fmtSoles(costoTotal)}</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-3 lg:p-4">
+        <p class="text-[11px] lg:text-xs text-ink-500">Promedio por OTM</p>
+        <p class="text-[13px] sm:text-xl lg:text-2xl font-bold text-ink-900 leading-tight mt-1 whitespace-nowrap tracking-tight">${fmtSoles(costoProm)}</p>
+        <p class="text-[10px] lg:text-[11px] text-ink-400">${otmConMat.length} OTM con materiales</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-3 lg:p-4">
+        <p class="text-[11px] lg:text-xs text-ink-500">En OTM abiertas</p>
+        <p class="text-[13px] sm:text-xl lg:text-2xl font-bold text-amber-600 leading-tight mt-1 whitespace-nowrap tracking-tight">${fmtSoles(costoAbierto)}</p>
+        <p class="text-[10px] lg:text-[11px] text-ink-400">aún no completadas</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 mb-3 lg:mb-4">
+      <div class="lg:col-span-2 bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <h3 class="font-semibold text-ink-900 text-sm">Costo por semana</h3>
+        <p class="text-[11px] lg:text-xs text-ink-400 mb-3">Últimas 8 semanas (lunes a domingo)</p>
+        <div class="flex items-end gap-1.5 sm:gap-3 h-40 lg:h-48">
+          ${costoSem.map(([ini, v], i)=>`
+            <div class="flex-1 h-full flex flex-col items-center justify-end gap-1 min-w-0" title="Semana ${numSemanaISO(ini)} (${ddmm(ini)}–${ddmm(addDaysISO(ini,6))}): ${fmtSoles(v)}">
+              <span class="text-[10px] font-semibold ${v? 'text-ink-700':'text-ink-300'}">${v ? fmtK(v) : '0'}</span>
+              <div class="bar w-full max-w-[44px] rounded-t-md ${i===7?'bg-brand-600':'bg-brand-300'}" style="height:${Math.max(v/maxSem*100, v?4:1)}%"></div>
+              <span class="text-[10px] text-ink-400 whitespace-nowrap">S${numSemanaISO(ini)}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      ${tarjeta('Costo por tipo de mantenimiento', 'Toca para filtrar',
+        tipoCosto.map(([k,l,c,v])=>`
+          <button onclick="setDashFilter('tipo','${k}')" class="filter-bar-btn w-full text-left block ${dashboardFilter.tipo && dashboardFilter.tipo!==k ? 'dimmed':''}">
+            <div class="flex justify-between text-xs mb-1"><span class="text-ink-600 flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${c}"></span>${l}</span>
+              <span class="font-semibold text-ink-800">${fmtSoles(v)} <span class="font-normal text-ink-400">${costoTotal ? Math.round(v/costoTotal*100) : 0}%</span></span></div>
+            <div class="w-full bg-ink-100 rounded-full h-2"><div class="bar h-2 rounded-full" style="width:${v/maxTipoC*100}%;background:${c}"></div></div>
+          </button>`).join('')
+        + `<div class="pt-3 mt-1 border-t border-ink-100"><p class="text-xs font-medium text-ink-600 mb-2">Por responsable</p>${barras(cResp, maxRespC, '#1f83f7', n=>`setDashFilter('responsable','${jsq(n)}')`, dashboardFilter.responsable, fmtSoles)}</div>`)}
+    </div>
+
+    <div class="flex items-start lg:grid lg:grid-cols-2 gap-3 lg:gap-4 mb-3 lg:mb-5 overflow-x-auto snap-x snap-mandatory -mx-3 px-3 sm:mx-0 sm:px-0 pb-1 date-pills-track">
+      ${tarjeta('Equipos con mayor costo', 'Top 6 · materiales reservados',
+        barras(cEquipo.map(([n,c])=>[corto(n,32),c]), maxEqC, '#8b5cf6', null, null, fmtSoles), 'min-w-[85%] sm:min-w-[60%] lg:min-w-0 snap-start')}
+      ${tarjeta('Materiales de mayor costo', 'Top 6 · cantidad × precio',
+        barras(topMatC.map(([n,c])=>[corto(n,32),c]), maxMatC, '#10b981', null, null, fmtSoles), 'min-w-[85%] sm:min-w-[60%] lg:min-w-0 snap-start')}
+    </div>`;
+
+  const tarjeta = (titulo, sub, cuerpo, extra='') => `
+    <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5 ${extra}">
+      <h3 class="font-semibold text-ink-900 text-sm">${titulo}</h3>
+      <p class="text-[11px] lg:text-xs text-ink-400 mb-3 lg:mb-4">${sub}</p>
+      <div class="space-y-2.5 lg:space-y-3">${cuerpo}</div>
+    </div>`;
+
+  const totalPrio = PRIORIDADES.reduce((s,p)=>s+prioCount[p],0) || 1;
 
   document.getElementById('view-dashboard').innerHTML = `
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4 mb-5">
-      ${kpiCard('Total OTM', total, 'de todos los estados', 'brand', iconClip())}
-      ${kpiCard('Pendientes / Programadas', pendProg, 'por iniciar', 'ink', iconClock())}
-      ${kpiCard('En ejecución', enEjecucion, 'trabajos en curso', 'blue', iconWrench())}
-      ${kpiCard('Esperando material/aprob.', esperando, 'trabajos en pausa', 'amber', iconPause())}
-      ${kpiCard('Completadas', completadas, 'finalizadas en el periodo', 'emerald', iconCheck())}
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 mb-5">
-      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5 sm:col-span-1">
-        <div class="flex items-start justify-between mb-3">
-          <div class="kpi-icon bg-violet-50 text-violet-600">${iconUsers()}</div>
-        </div>
-        <p class="text-2xl lg:text-3xl font-bold text-ink-900 leading-none">${hh} h</p>
-        <p class="text-xs lg:text-sm font-medium text-ink-600 mt-1.5">Horas Hombre registradas</p>
-        <p class="text-[11px] text-ink-400 mt-0.5">Jornales × horas ejecutadas al cierre</p>
-      </div>
+    ${filtroActivo ? `
+    <div class="flex flex-wrap items-center gap-2 mb-3 bg-brand-50 border border-brand-100 rounded-xl px-3 py-2">
+      <span class="text-xs font-medium text-brand-700">Filtro:</span>
+      ${Object.entries(dashboardFilter).filter(([,v])=>v).map(([k,v])=>`
+        <button onclick="setDashFilter('${k}','${jsq(v)}')" class="chip px-2.5 py-1 rounded-full bg-white border border-brand-200 text-xs text-brand-700">${etiquetaFiltro[k]}: ${esc(valorFiltro(k,v))} ✕</button>`).join('')}
+      <button onclick="clearDashFilter()" class="ml-auto text-xs font-medium text-ink-500 hover:text-red-600">Quitar todo</button>
+    </div>` : ''}
+
+    <!-- Indicadores -->
+    <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-4 mb-3 lg:mb-5">
+      ${kpi(total, 'Total OTM', '#0a6ed1')}
+      ${kpi(pendProg, 'Pendientes / Programadas', '#aab7c4')}
+      ${kpi(enEjecucion, 'En ejecución', '#1f83f7', 'En ejecución')}
+      ${kpi(esperando, 'Esperando mat./aprob.', '#f59e0b')}
+      ${kpi(completadas, 'Completadas', '#10b981', 'Completada')}
+      ${kpi(hh+' h', 'Horas Hombre', '#8b5cf6')}
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
-      <div class="lg:col-span-2 bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h3 class="font-semibold text-ink-900 text-sm">OTM por estado</h3>
-            <p class="text-xs text-ink-400">Clic en una barra para filtrar la tabla inferior</p>
+    <!-- Estado + Tipo/Prioridad -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 mb-3 lg:mb-5">
+      ${tarjeta('OTM por estado', 'Toca una barra para filtrar la lista inferior',
+        ESTADOS.map(e=>`
+          <button onclick="setDashFilter('estado','${e}')" class="filter-bar-btn w-full text-left block ${dashboardFilter.estado && dashboardFilter.estado!==e ? 'dimmed':''}">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-ink-600 flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${estadoColor[e]}"></span>${e}</span>
+              <span class="font-semibold text-ink-800">${estadoCount[e]}</span>
+            </div>
+            <div class="w-full bg-ink-100 rounded-full h-1.5 lg:h-2">
+              <div class="bar h-1.5 lg:h-2 rounded-full" style="width:${(estadoCount[e]/maxEstado*100)}%; background:${estadoColor[e]}"></div>
+            </div>
+          </button>`).join(''), 'lg:col-span-2')}
+
+      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
+        <h3 class="font-semibold text-ink-900 text-sm">Tipo de mantenimiento</h3>
+        <p class="text-[11px] lg:text-xs text-ink-400 mb-3">Toca para filtrar</p>
+        <div class="flex items-center gap-4">
+          <svg viewBox="0 0 42 42" class="w-24 h-24 lg:w-32 lg:h-32 -rotate-90 flex-shrink-0">
+            <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#e8ecf1" stroke-width="6"></circle>
+            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#0a6ed1" stroke-width="6" stroke-dasharray="${p1} ${100-p1}" stroke-dashoffset="0"></circle>
+            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#f59e0b" stroke-width="6" stroke-dasharray="${p2} ${100-p2}" stroke-dashoffset="${-p1}"></circle>
+            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#8b5cf6" stroke-width="6" stroke-dasharray="${p3} ${100-p3}" stroke-dashoffset="${-(p1+p2)}"></circle>
+          </svg>
+          <div class="flex-1 space-y-1 text-xs">
+            ${[['MP','Preventivo','bg-brand-500'],['MC','Correctivo','bg-amber-500'],['MMJ','Mejora','bg-violet-500']].map(([k,l,c])=>`
+              <button onclick="setDashFilter('tipo','${k}')" class="filter-bar-btn w-full flex justify-between items-center py-1.5 ${dashboardFilter.tipo && dashboardFilter.tipo!==k ? 'dimmed':''}">
+                <span class="flex items-center gap-1.5 text-ink-600"><span class="w-2.5 h-2.5 rounded-full ${c}"></span>${l}</span>
+                <span class="font-semibold text-ink-800">${tipoCount[k]} <span class="font-normal text-ink-400">(${Math.round(tipoCount[k]/tTotal*100)}%)</span></span>
+              </button>`).join('')}
           </div>
         </div>
-        <div class="space-y-2.5">
-          ${ESTADOS.map(e=>`
-            <button onclick="setDashFilter('estado','${e}')" class="filter-bar-btn w-full text-left ${dashboardFilter.estado && dashboardFilter.estado!==e ? 'dimmed':''}">
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-ink-600 flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${estadoColor[e]}"></span>${e}</span>
-                <span class="font-medium text-ink-800">${estadoCount[e]}</span>
-              </div>
-              <div class="w-full bg-ink-100 rounded-full h-2">
-                <div class="bar h-2 rounded-full" style="width:${(estadoCount[e]/maxEstado*100)}%; background:${estadoColor[e]}"></div>
-              </div>
-            </button>`).join('')}
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
-        <h3 class="font-semibold text-ink-900 text-sm mb-1">OTM por tipo de mantenimiento</h3>
-        <p class="text-xs text-ink-400 mb-4">Preventivo / Correctivo / Mejora</p>
-        <div class="flex items-center justify-center py-2">
-          <svg viewBox="0 0 42 42" class="w-36 h-36 -rotate-90">
-            <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#e8ecf1" stroke-width="6"></circle>
-            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#0a6ed1" stroke-width="6"
-              stroke-dasharray="${p1} ${100-p1}" stroke-dashoffset="0"></circle>
-            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#f59e0b" stroke-width="6"
-              stroke-dasharray="${p2} ${100-p2}" stroke-dashoffset="${-p1}"></circle>
-            <circle class="donut" cx="21" cy="21" r="15.9" fill="transparent" stroke="#8b5cf6" stroke-width="6"
-              stroke-dasharray="${p3} ${100-p3}" stroke-dashoffset="${-(p1+p2)}"></circle>
-          </svg>
-        </div>
-        <div class="space-y-1.5 text-xs mt-1">
-          <button onclick="setDashFilter('tipo','MP')" class="filter-bar-btn w-full flex justify-between items-center ${dashboardFilter.tipo && dashboardFilter.tipo!=='MP' ? 'dimmed':''}"><span class="flex items-center gap-1.5 text-ink-500"><span class="w-2.5 h-2.5 rounded-full bg-brand-500"></span>Preventivo</span><span class="font-medium text-ink-800">${tipoCount.MP}</span></button>
-          <button onclick="setDashFilter('tipo','MC')" class="filter-bar-btn w-full flex justify-between items-center ${dashboardFilter.tipo && dashboardFilter.tipo!=='MC' ? 'dimmed':''}"><span class="flex items-center gap-1.5 text-ink-500"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>Correctivo</span><span class="font-medium text-ink-800">${tipoCount.MC}</span></button>
-          <button onclick="setDashFilter('tipo','MMJ')" class="filter-bar-btn w-full flex justify-between items-center ${dashboardFilter.tipo && dashboardFilter.tipo!=='MMJ' ? 'dimmed':''}"><span class="flex items-center gap-1.5 text-ink-500"><span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>Mejora</span><span class="font-medium text-ink-800">${tipoCount.MMJ}</span></button>
+        <div class="mt-4 pt-3 border-t border-ink-100">
+          <p class="text-xs font-medium text-ink-600 mb-2">Prioridad</p>
+          <div class="flex h-2.5 rounded-full overflow-hidden bg-ink-100 mb-2">
+            ${PRIORIDADES.map(p=>`<div style="width:${prioCount[p]/totalPrio*100}%;background:${prioColor[p]}"></div>`).join('')}
+          </div>
+          <div class="flex gap-1.5">
+            ${PRIORIDADES.map(p=>`<button onclick="setDashFilter('prioridad','${p}')" class="filter-bar-btn flex-1 flex items-center justify-center gap-1 text-[11px] py-1.5 rounded-lg border ${dashboardFilter.prioridad===p?'border-brand-400 bg-brand-50':'border-ink-100'} ${dashboardFilter.prioridad && dashboardFilter.prioridad!==p ? 'dimmed':''}">
+              <span class="w-2 h-2 rounded-full" style="background:${prioColor[p]}"></span>${p} <b class="text-ink-800">${prioCount[p]}</b></button>`).join('')}
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
-      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
-        <h3 class="font-semibold text-ink-900 text-sm mb-1">OTM por responsable</h3>
-        <p class="text-xs text-ink-400 mb-4">Carga de trabajo por supervisor</p>
-        <div class="space-y-3">
-          ${RESPONSABLES.map(r=>`
-            <button onclick="setDashFilter('responsable','${jsq(r)}')" class="filter-bar-btn w-full text-left ${dashboardFilter.responsable && dashboardFilter.responsable!==r ? 'dimmed':''}">
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-ink-600">${r}</span>
-                <span class="font-medium text-ink-800">${respCount[r]||0}</span>
-              </div>
-              <div class="w-full bg-ink-100 rounded-full h-2">
-                <div class="bg-brand-500 h-2 rounded-full bar" style="width:${((respCount[r]||0)/maxResp*100)}%"></div>
-              </div>
-            </button>`).join('')}
-        </div>
-      </div>
+    ${seccionCostos()}
 
-      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
-        <h3 class="font-semibold text-ink-900 text-sm mb-1">Materiales más utilizados</h3>
-        <p class="text-xs text-ink-400 mb-4">Unidades consumidas en OTM registradas</p>
-        <div class="space-y-3">
-          ${materialesUso.map(([nombre,usos])=>`
-            <div>
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-ink-600">${nombre.length>26? nombre.slice(0,26)+'…':nombre}</span>
-                <span class="font-medium text-ink-800">${usos}</span>
-              </div>
-              <div class="w-full bg-ink-100 rounded-full h-2">
-                <div class="bg-emerald-500 h-2 rounded-full bar" style="width:${(usos/maxUso*100)}%"></div>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
-        <h3 class="font-semibold text-ink-900 text-sm mb-1">Equipos con más intervenciones</h3>
-        <p class="text-xs text-ink-400 mb-4">OTM registradas por activo</p>
-        <div class="space-y-3">
-          ${topEquipos.map(([nombre,count])=>`
-            <div>
-              <div class="flex justify-between text-xs mb-1">
-                <span class="text-ink-600">${nombre.length>24?nombre.slice(0,24)+'…':nombre}</span>
-                <span class="font-medium text-ink-800">${count}</span>
-              </div>
-              <div class="w-full bg-ink-100 rounded-full h-2">
-                <div class="bg-violet-500 h-2 rounded-full bar" style="width:${(count/maxEq*100)}%"></div>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>
+    <h2 class="text-sm lg:text-base font-semibold text-ink-900 mb-2 lg:mb-3">Actividad</h2>
+    <!-- Rankings: en celular se deslizan de lado; en PC, 3 columnas -->
+    <div class="flex items-start lg:grid lg:grid-cols-3 gap-3 lg:gap-4 mb-3 lg:mb-5 overflow-x-auto snap-x snap-mandatory -mx-3 px-3 sm:mx-0 sm:px-0 pb-1 date-pills-track">
+      ${tarjeta('Por responsable', 'Carga de trabajo · toca para filtrar',
+        barras(RESPONSABLES.map(r=>[r, respCount[r]||0]), maxResp, '#1f83f7', n=>`setDashFilter('responsable','${jsq(n)}')`, dashboardFilter.responsable),
+        'min-w-[85%] sm:min-w-[60%] lg:min-w-0 snap-start')}
+      ${tarjeta('Materiales más usados', 'Unidades en OTM registradas',
+        barras(materialesUso.map(([n,c])=>[corto(n,30),c]), maxUso, '#10b981'),
+        'min-w-[85%] sm:min-w-[60%] lg:min-w-0 snap-start')}
+      ${tarjeta('Equipos con más OTM', 'Intervenciones por activo',
+        barras(topEquipos.map(([n,c])=>[corto(n,30),c]), maxEq, '#8b5cf6'),
+        'min-w-[85%] sm:min-w-[60%] lg:min-w-0 snap-start')}
     </div>
+    <p class="lg:hidden text-center text-[11px] text-ink-400 -mt-1 mb-3">← desliza para ver más →</p>
 
+    <!-- Lista de OTM -->
     <div class="bg-white rounded-xl shadow-card border border-ink-100 p-4 lg:p-5">
-      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h3 class="font-semibold text-ink-900 text-sm">OTM ${filtroActivo? 'filtradas':'recientes'}</h3>
-        <div class="flex items-center gap-2">
-          ${filtroActivo ? `<button onclick="clearDashFilter()" class="text-xs font-medium text-ink-500 hover:text-ink-700 flex items-center gap-1">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>Quitar filtro</button>` : ''}
-          <button onclick="navigate('gestion')" class="text-xs font-medium text-brand-600 hover:text-brand-700">Ver todas →</button>
-        </div>
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <h3 class="font-semibold text-ink-900 text-sm">OTM ${filtroActivo? 'filtradas':'recientes'} <span class="text-ink-400 font-normal">(${filtered.length})</span></h3>
+        <button onclick="navigate('gestion')" class="text-xs font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap">Ver todas →</button>
       </div>
-      <div class="overflow-x-auto">
+      <!-- Celular: tarjetas -->
+      <div class="sm:hidden divide-y divide-ink-100">
+        ${filtered.slice(0,8).map(o=>`
+          <button onclick="openOTM('${o.id}','ver')" class="w-full text-left py-3 flex gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-[11px] text-ink-400">${o.id} · ${fmtDate(o.fecha)}</p>
+              <p class="text-sm font-medium text-ink-800 truncate">${esc(o.actividad)}</p>
+              <p class="text-xs text-ink-500 truncate">${esc(o.equipo)} · ${esc(o.responsable)}</p>
+              ${costoOTM(o) ? `<p class="text-xs font-semibold text-ink-700 mt-0.5">${fmtSoles(costoOTM(o))}</p>` : ''}
+            </div>
+            <div class="flex flex-col items-end gap-1 flex-shrink-0">${badgeEstado(o.estado)}${badgePrioridad(o.prioridad)}</div>
+          </button>`).join('') || `<p class="text-center py-8 text-sm text-ink-400">No hay OTM que coincidan con el filtro.</p>`}
+      </div>
+      <!-- PC / tablet: tabla -->
+      <div class="hidden sm:block overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-ink-400 text-xs border-b border-ink-100">
-              <th class="py-2 font-medium">OTM</th>
-              <th class="py-2 font-medium">Fecha</th>
-              <th class="py-2 font-medium">Equipo</th>
-              <th class="py-2 font-medium">Responsable</th>
-              <th class="py-2 font-medium">Prioridad</th>
-              <th class="py-2 font-medium">Estado</th>
+              <th class="py-2 font-medium">OTM</th><th class="py-2 font-medium">Fecha</th><th class="py-2 font-medium">Equipo</th>
+              <th class="py-2 font-medium">Actividad</th><th class="py-2 font-medium">Responsable</th><th class="py-2 font-medium text-right pr-3">Costo</th><th class="py-2 font-medium">Prioridad</th><th class="py-2 font-medium">Estado</th>
             </tr>
           </thead>
           <tbody>
             ${filtered.slice(0,8).map(o=>`
-              <tr class="border-b border-ink-50 cursor-pointer hover:bg-ink-50/60" onclick="navigate('gestion')">
-                <td class="py-2.5 font-medium text-ink-800">${o.id}</td>
-                <td class="py-2.5 text-ink-500 whitespace-nowrap">${fmtDate(o.fecha)}</td>
-                <td class="py-2.5 text-ink-600">${o.equipo}</td>
-                <td class="py-2.5 text-ink-600 whitespace-nowrap">${o.responsable}</td>
-                <td class="py-2.5">${badgePrioridad(o.prioridad)}</td>
+              <tr class="border-b border-ink-50 cursor-pointer hover:bg-ink-50/60" onclick="openOTM('${o.id}','ver')">
+                <td class="py-2.5 pr-2 font-medium text-ink-800 whitespace-nowrap">${o.id}</td>
+                <td class="py-2.5 pr-2 text-ink-500 whitespace-nowrap">${fmtDate(o.fecha)}</td>
+                <td class="py-2.5 pr-2 text-ink-600">${esc(o.equipo)}</td>
+                <td class="py-2.5 pr-2 text-ink-600">${esc(o.actividad)}</td>
+                <td class="py-2.5 pr-2 text-ink-600 whitespace-nowrap">${esc(o.responsable)}</td>
+                <td class="py-2.5 pr-3 text-right font-medium text-ink-800 whitespace-nowrap">${costoOTM(o) ? fmtSoles(costoOTM(o)) : '—'}</td>
+                <td class="py-2.5 pr-2">${badgePrioridad(o.prioridad)}</td>
                 <td class="py-2.5">${badgeEstado(o.estado)}</td>
-              </tr>`).join('') || `<tr><td colspan="6" class="text-center py-8 text-ink-400">No hay OTM que coincidan con el filtro seleccionado.</td></tr>`}
+              </tr>`).join('') || `<tr><td colspan="8" class="text-center py-8 text-ink-400">No hay OTM que coincidan con el filtro seleccionado.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1035,8 +1168,9 @@ function renderCrear(){
             </div>
             <div class="mt-3 flex items-center gap-3">
               <label class="text-sm font-medium text-ink-700">Cantidad</label>
-              <input type="number" id="f_material_cant" min="0.01" step="any" value="1" class="w-24 border border-ink-200 rounded-lg px-3 py-2 text-sm">
+              <input type="number" id="f_material_cant" min="0.01" step="any" value="1" oninput="pintarResumenForm()" class="w-24 border border-ink-200 rounded-lg px-3 py-2 text-sm">
             </div>
+            <div id="f_material_resumen"></div>
             <div class="flex gap-2 mt-3">
               <button type="button" onclick="agregarMaterialForm()" class="px-4 py-2 rounded-lg bg-ink-800 hover:bg-ink-900 text-white text-sm font-medium">Agregar</button>
               <button type="button" onclick="cerrarMaterialForm()" class="px-4 py-2 rounded-lg border border-ink-200 text-ink-600 text-sm font-medium hover:bg-ink-50">Cancelar</button>
@@ -1114,7 +1248,7 @@ function wireCrearAutocompletes(){
   wireAutocomplete({
     inputId:'ac_input_material', listId:'ac_list_material',
     itemsProvider: ()=> MATERIALES_CARGADOS ? MAT_ITEMS : null,
-    onPick: (codigo)=>{ document.getElementById('f_material_codigo').value = codigo; },
+    onPick: (codigo)=>{ document.getElementById('f_material_codigo').value = codigo; pintarResumenForm(); },
     emptyText:'No se encontró el material'
   });
 }
@@ -1150,6 +1284,7 @@ function toggleExterno(){
 function clearMaterialInput(){
   document.getElementById('ac_input_material').value='';
   document.getElementById('f_material_codigo').value='';
+  const r = document.getElementById('f_material_resumen'); if(r) r.innerHTML='';
 }
 function abrirMaterialForm(){
   document.getElementById('materialAddFields').classList.remove('hidden');
@@ -1171,7 +1306,7 @@ function agregarMaterialForm(){
   if(!m){ toast('Material no encontrado en el catálogo', 'error'); return; }
   const ya = crearState.materiales.find(x=>x.codigo===m.codigo);
   if(ya) ya.cantidad = +(ya.cantidad + cant).toFixed(3);   // si ya estaba, se suma
-  else crearState.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, stock:m.stock});
+  else crearState.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, stock:m.stock, precio:m.precio||0});
   paintMaterialesForm();
   cerrarMaterialForm();
 }
@@ -1183,18 +1318,21 @@ function paintMaterialesForm(){
   const el = document.getElementById('materialesFormList');
   if(!el) return;
   if(crearState.materiales.length===0){ el.innerHTML = ''; return; }
+  const total = crearState.materiales.reduce((s,m)=> s + costoMat(m), 0);
   el.innerHTML = crearState.materiales.map((m,i)=>`
     <div class="flex items-center justify-between gap-3 bg-ink-50 rounded-lg px-3 py-2 text-sm">
-      <div class="min-w-0">
-        <p class="font-medium text-ink-800 truncate">${m.codigo} · ${m.desc}</p>
-        <p class="text-xs text-ink-400">Cantidad: ${m.cantidad} ${m.unidad}
+      <div class="min-w-0 flex-1">
+        <p class="font-medium text-ink-800 truncate">${esc(m.codigo)} · ${esc(m.desc)}</p>
+        <p class="text-xs text-ink-400">${m.cantidad} ${esc(m.unidad)} × ${m.precio ? fmtPU(m.precio) : 'sin precio'}
           ${m.cantidad > m.stock ? `<span class="ml-1.5 text-amber-600 font-medium">⚠ stock disponible: ${m.stock}</span>` : ''}
         </p>
       </div>
+      <span class="text-sm font-semibold text-ink-800 whitespace-nowrap">${fmtSoles(costoMat(m))}</span>
       <button type="button" onclick="quitarMaterialForm(${i})" class="text-ink-400 hover:text-red-600 flex-shrink-0">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
-    </div>`).join('');
+    </div>`).join('') + `
+    <div class="flex justify-between items-center px-3 pt-2 text-sm"><span class="font-medium text-ink-600">Total de la reserva</span><span class="font-bold text-brand-700">${fmtSoles(total)}</span></div>`;
 }
 
 function construirOTMDesdeFormulario(){
@@ -1254,7 +1392,7 @@ function construirOTMDesdeFormulario(){
     comentarioCierre: '',
     jornalesEjecutados: null, horasEjecutadas: null, hh: 0,
     personalAsignado: [...crearState.selectedTecnicos],
-    materiales: crearState.materiales.map(m=>({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:m.cantidad})),
+    materiales: crearState.materiales.map(m=>({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:m.cantidad, precio:m.precio||0})),
     historial: [{estado:'Pendiente', fecha:new Date()}],   // hora real de registro
   };
 }
@@ -1305,8 +1443,9 @@ function mensajeWhatsAppOTM(o){
   if(o.materiales && o.materiales.length){
     lineas.push(`📦 *Materiales solicitados:*`);
     o.materiales.forEach(m=>{
-      lineas.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`);
+      lineas.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad} — ${fmtSoles(costoMat(m))}`);
     });
+    lineas.push(`💰 *Costo total de la reserva:* ${fmtSoles(costoOTM(o))}`);
   }
   return lineas.join('\n');
 }
@@ -1340,7 +1479,8 @@ function mensajeReenvioOTM(o){
   }
   if(o.materiales.length){
     l.push(`📦 *Materiales:*`);
-    o.materiales.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`));
+    o.materiales.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad} — ${fmtSoles(costoMat(m))}`));
+    l.push(`💰 *Costo total de materiales:* ${fmtSoles(costoOTM(o))}`);
   }
   return l.join('\n');
 }
@@ -1358,12 +1498,14 @@ function registrarMatNuevo(otmId, m, cant){
   const lista = MAT_NUEVOS[otmId] = MAT_NUEVOS[otmId] || [];
   const ya = lista.find(x=>x.codigo===m.codigo);
   if(ya) ya.cantidad = +(ya.cantidad + cant).toFixed(3);
-  else lista.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  else lista.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, precio:m.precio||0});
   guardarMatNuevos();
 }
 function mensajeMaterialesNuevos(o, lista){
   const l = [`📦 *Materiales añadidos a OTM*`, ...cabeceraOTM(o), `📅 *Fecha:* ${fmtDate(new Date())}`, `🧾 *Materiales añadidos:*`];
-  lista.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad}`));
+  lista.forEach(m=> l.push(`▫️ ${m.codigo} - ${m.desc} — Cant: ${m.cantidad} ${m.unidad} — ${fmtSoles(costoMat(m))}`));
+  l.push(`💰 *Costo de lo añadido:* ${fmtSoles(lista.reduce((s,m)=>s+costoMat(m),0))}`);
+  l.push(`📊 *Acumulado de la OTM:* ${fmtSoles(costoOTM(o))}`);
   return l.join('\n');
 }
 function enviarMatNuevosWhatsApp(otmId){
@@ -1555,7 +1697,7 @@ function paintGestionCards(){
           <span class="text-ink-500">Responsable: <span class="font-medium text-ink-700">${o.responsable}</span></span>
           <span class="text-ink-500">Fecha: <span class="font-medium text-ink-700">${fmtDate(o.fecha)}</span></span>
           ${esConFuga(o) ? `<span class="text-amber-600 font-medium">⚠ Con fuga</span>` : ''}
-          ${o.materiales.length ? `<span class="text-ink-500">${o.materiales.length} material(es)</span>` : ''}
+          ${o.materiales.length ? `<span class="text-ink-500">${o.materiales.length} material(es) · <span class="font-semibold text-ink-800">${fmtSoles(costoOTM(o))}</span></span>` : ''}
           ${o.personalAsignado.length ? `<span class="text-ink-500">${o.personalAsignado.length} técnico(s)</span>` : `<span class="text-amber-600">Sin personal asignado</span>`}
         </div>
         <div class="flex items-center justify-between mt-3">
@@ -1670,10 +1812,11 @@ function openVerModal(o){
             <div id="tab-materiales" class="tab-panel hidden">
               ${o.materiales.length ? `
               <table class="w-full text-xs mb-3">
-                <thead><tr class="text-left text-ink-400 border-b border-ink-100"><th class="py-1.5">Material</th><th class="py-1.5">Descripción</th><th class="py-1.5 text-right">Cantidad</th><th></th></tr></thead>
+                <thead><tr class="text-left text-ink-400 border-b border-ink-100"><th class="py-1.5">Material</th><th class="py-1.5 text-right">Cant.</th><th class="py-1.5 text-right hidden sm:table-cell">P. unit.</th><th class="py-1.5 text-right">Subtotal</th><th></th></tr></thead>
                 <tbody>
-                ${o.materiales.map((m,i)=>`<tr class="border-b border-ink-50"><td class="py-1.5 font-medium text-ink-700">${m.codigo}</td><td class="py-1.5 text-ink-600">${m.desc}</td><td class="py-1.5 text-right text-ink-700">${m.cantidad} ${m.unidad}</td><td class="py-1.5 text-right"><button onclick="removeMaterialFromOTM('${o.id}',${i})" class="text-ink-400 hover:text-red-600">✕</button></td></tr>`).join('')}
+                ${o.materiales.map((m,i)=>`<tr class="border-b border-ink-50 align-top"><td class="py-1.5 pr-2"><span class="font-medium text-ink-700">${esc(m.codigo)}</span><br><span class="text-ink-500">${esc(m.desc)}</span><span class="sm:hidden text-ink-400"><br>${m.precio ? fmtPU(m.precio)+' c/u' : 'sin precio'}</span></td><td class="py-1.5 text-right text-ink-700 whitespace-nowrap">${m.cantidad} ${esc(m.unidad)}</td><td class="py-1.5 text-right text-ink-600 whitespace-nowrap hidden sm:table-cell">${m.precio ? fmtPU(m.precio) : '—'}</td><td class="py-1.5 text-right font-semibold text-ink-800 whitespace-nowrap">${fmtSoles(costoMat(m))}</td><td class="py-1.5 pl-2 text-right"><button onclick="removeMaterialFromOTM('${o.id}',${i})" class="text-ink-400 hover:text-red-600">✕</button></td></tr>`).join('')}
                 </tbody>
+                <tfoot><tr><td class="pt-2 font-semibold text-ink-700" colspan="2">Costo total de materiales</td><td class="hidden sm:table-cell"></td><td class="pt-2 text-right font-bold text-brand-700 whitespace-nowrap">${fmtSoles(costoOTM(o))}</td><td></td></tr></tfoot>
               </table>` : `<p class="text-xs text-ink-400 mb-3">No se han asociado materiales a esta OTM.</p>`}
               <button onclick="closeModal(); openAgregarMaterialOTM('${o.id}')" class="px-3 py-1.5 rounded-lg border border-dashed border-ink-300 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-600">+ Agregar material</button>
             </div>
@@ -1964,7 +2107,7 @@ async function confirmarEliminarOTM(id){
 function sumarMaterialAOTM(o, m, cant){
   const ya = o.materiales.find(x=>String(x.codigo)===m.codigo);
   if(ya) ya.cantidad = +(Number(ya.cantidad) + cant).toFixed(3);
-  else o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant});
+  else o.materiales.push({codigo:m.codigo, desc:m.desc, unidad:m.unidad, cantidad:cant, precio:m.precio||0});
 }
 
 /* ---- Agregar material directo a una OTM (desde tarjeta) ---- */
@@ -1986,8 +2129,9 @@ function openAgregarMaterialOTM(otmId){
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad</label>
-            <input type="number" id="qmat_cant" min="0.01" step="any" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-            <p id="qmat_stockinfo" class="text-[11px] text-ink-400 mt-1"></p>
+            <input type="number" id="qmat_cant" min="0.01" step="any" value="1" oninput="pintarResumenQmat()" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <div id="qmat_resumen" data-otm="${o.id}"></div>
+            <p class="text-[11px] text-ink-400 mt-2">Costo actual de materiales de esta OTM: <b class="text-ink-700">${fmtSoles(costoOTM(o))}</b></p>
           </div>
         </div>
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
@@ -2003,9 +2147,7 @@ function openAgregarMaterialOTM(otmId){
     itemsProvider: ()=> MATERIALES_CARGADOS ? MAT_ITEMS : null,
     onPick: (codigo)=>{
       document.getElementById('qmat_codigo').value = codigo;
-      const m = MATERIALES.find(x=>x.codigo===String(codigo));
-      if(!m) return;
-      document.getElementById('qmat_stockinfo').innerHTML = `Stock disponible: ${m.stock} ${m.unidad}${m.stock<m.min?' · <span class="text-amber-600 font-medium">stock bajo</span>':''}`;
+      pintarResumenQmat();
     },
     emptyText:'No se encontró el material'
   });
@@ -2078,6 +2220,7 @@ function renderMateriales(){
             <th class="py-2.5 px-3 sm:px-4 font-medium">Descripción</th>
             <th class="hidden sm:table-cell py-2.5 px-4 font-medium">Unidad</th>
             <th class="py-2.5 px-3 sm:px-4 font-medium text-right sm:text-left">Stock</th>
+            <th class="hidden sm:table-cell py-2.5 px-4 font-medium text-right">Precio unit.</th>
             <th class="hidden sm:table-cell py-2.5 px-4 font-medium">Estado</th>
             <th class="py-2.5 px-3 sm:px-4 font-medium text-right"><span class="hidden sm:inline">Acciones</span></th>
           </tr>
@@ -2098,7 +2241,7 @@ function paintMateriales(){
   document.getElementById('matCount').textContent = matLista.length;
   const more = document.getElementById('matMore');
   if(matLista.length===0){
-    body.innerHTML = MATERIALES_CARGADOS ? `<tr><td colspan="6" class="text-center py-10 text-ink-400 text-sm">No se encontraron materiales.</td></tr>` : '';
+    body.innerHTML = MATERIALES_CARGADOS ? `<tr><td colspan="7" class="text-center py-10 text-ink-400 text-sm">No se encontraron materiales.</td></tr>` : '';
     more.innerHTML = '';
     return;
   }
@@ -2115,7 +2258,9 @@ function paintMateriales(){
       </td>
       <td class="hidden sm:table-cell py-2.5 px-4 text-ink-500">${esc(m.unidad)}</td>
       <td class="py-2.5 px-3 sm:px-4 text-ink-800 font-medium text-right sm:text-left whitespace-nowrap">${m.stock}<span class="sm:hidden text-[11px] text-ink-400 font-normal"> ${esc(m.unidad)}</span>
+        <span class="sm:hidden block text-[11px] text-ink-500 font-normal">${m.precio ? fmtPU(m.precio)+' c/u' : 'sin precio'}</span>
         <span class="sm:hidden block"><span class="chip px-1.5 py-0.5 rounded-full text-[10px] font-medium ${cls}">${estado}</span></span></td>
+      <td class="hidden sm:table-cell py-2.5 px-4 text-right text-ink-700 whitespace-nowrap">${m.precio ? fmtPU(m.precio) : '<span class="text-ink-300">—</span>'}</td>
       <td class="hidden sm:table-cell py-2.5 px-4"><span class="chip px-2.5 py-1 rounded-full text-xs font-medium ${cls}">${estado}</span></td>
       <td class="py-2.5 px-3 sm:px-4 text-right">
         <button onclick="openAsociarMaterial('${jsq(m.codigo)}')" class="text-xs font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap px-2 py-2 sm:p-0">+ <span class="hidden sm:inline">Asociar a </span>OTM</button>
@@ -2168,9 +2313,10 @@ function paintAsocFiltro(){
   }).join('') + `<button type="button" onclick="limpiarSemanasAsoc()" class="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-dashed border-ink-300 text-ink-500 hover:text-red-600 hover:border-red-300">Limpiar filtro</button>`;
   const lista = otmsAbiertasFiltradas();
   sel.innerHTML = lista.length
-    ? lista.map(o=>`<option value="${o.id}">${fmtDate(o.fecha)} · ${o.id} · ${esc(o.equipo)} — ${esc(o.actividad)}</option>`).join('')
+    ? lista.map(o=>`<option value="${o.id}">${fmtDate(o.fecha)} · ${o.id} · ${esc(o.equipo)} — ${esc(o.actividad)} (${fmtSoles(costoOTM(o))})</option>`).join('')
     : `<option value="">No hay OTM abiertas en la(s) semana(s) seleccionada(s)</option>`;
   document.getElementById('asoc_total').textContent = `${lista.length} OTM abiertas${asocSemanas.size?' en el filtro':''}`;
+  pintarResumenAsoc();
 }
 function openAsociarMaterial(codigo){
   const m = MATERIALES.find(x=>x.codigo===String(codigo));
@@ -2195,12 +2341,12 @@ function openAsociarMaterial(codigo){
               <label class="block text-sm font-medium text-ink-700">OTM destino</label>
               <span id="asoc_total" class="text-[11px] text-ink-400"></span>
             </div>
-            <select id="asoc_otm" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm"></select>
+            <select id="asoc_otm" onchange="pintarResumenAsoc()" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm"></select>
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5">Cantidad</label>
-            <input type="number" id="asoc_cant" min="0.01" step="any" value="1" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-            <p id="asoc_stockinfo" class="text-[11px] text-ink-400 mt-1">Stock disponible: ${m.stock} ${esc(m.unidad)}${m.stock < m.min ? ' · <span class="text-amber-600 font-medium">stock bajo</span>':''}</p>
+            <input type="number" id="asoc_cant" min="0.01" step="any" value="1" oninput="pintarResumenAsoc()" class="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <div id="asoc_resumen"></div>
           </div>
         </div>
         <div class="flex justify-end gap-3 px-5 py-4 border-t border-ink-100">
